@@ -1,0 +1,1236 @@
+/* ============================================================
+   NEXUS OS — Dashboard layout & component styles
+   Consumes tokens.css. Defines only the nx-* classes referenced
+   by App.tsx / HUD/TopBar.tsx / Graph/RadarCanvas.tsx.
+   ============================================================ */
+
+/* ---------- Reset ------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+/* ---------- Drag & Drop replay overlay ---------------------- */
+.nx-drop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  pointer-events: none; /* let the underlying window keep handling drag events */
+  display: grid;
+  place-items: center;
+  background: rgba(0, 8, 20, 0.55);
+  backdrop-filter: blur(6px) saturate(1.2);
+  -webkit-backdrop-filter: blur(6px) saturate(1.2);
+  animation: nx-drop-fade 180ms var(--ease-out);
+}
+@keyframes nx-drop-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.nx-drop__frame {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 28px 56px;
+  border: 1px solid rgba(0, 191, 255, 0.45);
+  border-radius: 4px;
+  background: rgba(11, 11, 24, 0.72);
+  box-shadow: 0 0 0 1px rgba(0, 191, 255, 0.15) inset,
+              0 0 80px rgba(0, 191, 255, 0.25),
+              0 0 240px rgba(0, 191, 255, 0.08);
+}
+.nx-drop__bracket {
+  font: 300 64px/1 var(--font-display);
+  color: var(--cyan);
+  opacity: 0.55;
+  text-shadow: 0 0 18px rgba(0, 191, 255, 0.45);
+  animation: nx-drop-pulse 1400ms var(--ease-out) infinite;
+}
+.nx-drop__bracket--r { animation-delay: 700ms; }
+@keyframes nx-drop-pulse {
+  0%, 100% { opacity: 0.55; transform: translateX(0); }
+  50%      { opacity: 0.95; }
+}
+.nx-drop__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.nx-drop__label {
+  font: 600 var(--t-20)/1 var(--font-display);
+  letter-spacing: 0.32em;
+  color: var(--cyan);
+  text-shadow: 0 0 20px rgba(0, 191, 255, 0.55);
+}
+.nx-drop__sub {
+  font: 500 var(--t-10)/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  color: var(--bone-dim);
+  opacity: 0.7;
+}
+.nx-drop__hint {
+  margin-top: 10px;
+  font: 500 9px/1.2 var(--font-mono);
+  letter-spacing: 0.16em;
+  color: var(--amber);
+  opacity: 0.75;
+}
+.nx-drop__kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 4px;
+  border: 1px solid var(--amber);
+  border-radius: 3px;
+  font: 600 9px/1 var(--font-mono);
+  color: var(--amber);
+  background: rgba(255, 178, 0, 0.06);
+  text-shadow: 0 0 4px rgba(255, 178, 0, 0.45);
+}
+
+/* Diff-mode metrics variant — slightly tighter top border to flag the
+   readout has switched from absolute to delta. */
+.nx-prop__metrics--diff {
+  border-top: 1px dashed rgba(255, 178, 0, 0.32);
+  padding-top: var(--s-2);
+}
+
+/* ---------- Replay mode badge (below the TopBar) ------------ */
+.nx-replay-badge {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  padding: 5px var(--s-4);
+  font: 600 var(--t-10)/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  color: var(--amber);
+  background: rgba(255, 178, 0, 0.06);
+  border-bottom: 1px solid rgba(255, 178, 0, 0.32);
+  text-shadow: 0 0 6px rgba(255, 178, 0, 0.45);
+}
+.nx-replay-badge__msg {
+  /* Center the message at the natural badge midpoint; the button hangs to
+     the right edge using absolute positioning. */
+  letter-spacing: 0.18em;
+}
+.nx-replay-badge__resume {
+  appearance: none;
+  position: absolute;
+  right: var(--s-4);
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  /* High-contrast: deep void background, sharp cyan border, bright cyan text */
+  background: var(--bg-canvas);
+  color: var(--cyan);
+  border: 1px solid var(--cyan);
+  border-radius: var(--r-1);
+  font: 700 var(--t-10)/1 var(--font-mono);
+  letter-spacing: 0.20em;
+  cursor: pointer;
+  text-shadow: 0 0 8px rgba(0, 191, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(0, 191, 255, 0.10),
+              0 0 14px rgba(0, 191, 255, 0.30),
+              inset 0 0 0 1px rgba(0, 191, 255, 0.06);
+  transition: background var(--dur-1) var(--ease-out),
+              color var(--dur-1) var(--ease-out),
+              box-shadow var(--dur-1) var(--ease-out);
+}
+.nx-replay-badge__resume:hover {
+  background: rgba(0, 191, 255, 0.14);
+  color: var(--bone);
+  box-shadow: 0 0 0 1px var(--cyan),
+              0 0 22px rgba(0, 191, 255, 0.55),
+              inset 0 0 0 1px rgba(0, 191, 255, 0.20);
+}
+.nx-replay-badge__resume:active {
+  background: rgba(0, 191, 255, 0.25);
+}
+
+/* ---------- Boot Sequence Overlay (first-run tour) ---------- */
+.nx-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 6, 18, 0.78);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  animation: nx-boot-fade-in 240ms var(--ease-out);
+  cursor: default;
+}
+.nx-boot--fading {
+  animation: nx-boot-fade-out 320ms var(--ease-out) forwards;
+  pointer-events: none;
+}
+@keyframes nx-boot-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes nx-boot-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.nx-boot__frame {
+  position: relative;
+  min-width: 540px;
+  max-width: 80vw;
+  padding: 36px 56px 28px;
+  border: 1px solid rgba(0, 191, 255, 0.45);
+  border-radius: 4px;
+  background: rgba(8, 10, 18, 0.78);
+  box-shadow: 0 0 0 1px rgba(0, 191, 255, 0.10) inset,
+              0 0 0 4px rgba(0, 191, 255, 0.04),
+              0 0 80px rgba(0, 191, 255, 0.18),
+              0 0 240px rgba(0, 191, 255, 0.06);
+}
+
+/* Decorative ASCII corners — pure JARVIS overkill */
+.nx-boot__corner {
+  position: absolute;
+  font: 400 18px/1 var(--font-mono);
+  color: var(--cyan);
+  opacity: 0.55;
+  text-shadow: 0 0 8px rgba(0, 191, 255, 0.55);
+}
+.nx-boot__corner--tl { top: 6px;    left: 8px;  }
+.nx-boot__corner--tr { top: 6px;    right: 8px; }
+.nx-boot__corner--bl { bottom: 6px; left: 8px;  }
+.nx-boot__corner--br { bottom: 6px; right: 8px; }
+
+.nx-boot__lines {
+  font: 500 var(--t-13)/1.7 var(--font-mono);
+  color: var(--cyan);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 6px rgba(0, 191, 255, 0.35);
+  white-space: pre;
+}
+.nx-boot__line {
+  min-height: 1.7em;
+}
+.nx-boot__line--head {
+  color: var(--bone);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-shadow: 0 0 8px rgba(0, 191, 255, 0.65);
+  margin-bottom: 6px;
+}
+.nx-boot__line--break {
+  min-height: 0.8em;
+}
+.nx-boot__cursor {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 191, 255, 0.85);
+  animation: nx-boot-cursor 720ms steps(2) infinite;
+}
+@keyframes nx-boot-cursor {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.nx-boot__ack {
+  margin-top: 24px;
+  text-align: center;
+  font: 500 var(--t-10)/1 var(--font-mono);
+  letter-spacing: 0.20em;
+  color: var(--fg-low);
+  opacity: 0.65;
+  transition: opacity var(--dur-2) var(--ease-out),
+              color var(--dur-2) var(--ease-out);
+}
+.nx-boot__ack--ready {
+  opacity: 1;
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(255, 178, 0, 0.55);
+}
+.nx-boot__kbd {
+  display: inline-block;
+  margin: 0 5px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font: 700 var(--t-10)/1 var(--font-mono);
+  letter-spacing: 0.18em;
+}
+
+/* ---------- Snapshot flash (cinematic system-scan) ---------- */
+/* Full-screen overlay that flashes once per capture. The component is
+   keyed on a counter so consecutive snapshots restart the animation. */
+.nx-snapshot-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  /* inset cyan glow + faint central tint — like a HUD scan capture */
+  box-shadow: inset 0 0 0 2px rgba(0, 191, 255, 0.85),
+              inset 0 0 80px rgba(0, 191, 255, 0.35),
+              inset 0 0 200px rgba(0, 191, 255, 0.10);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 191, 255, 0.08) 0%,
+    rgba(0, 191, 255, 0.00) 60%
+  );
+  animation: nx-snapshot-pulse 250ms var(--ease-out) forwards;
+}
+@keyframes nx-snapshot-pulse {
+  0%   { opacity: 0;   transform: scale(1.004); }
+  35%  { opacity: 1;   transform: scale(1.000); }
+  100% { opacity: 0;   transform: scale(0.998); }
+}
+
+/* ---------- App shell --------------------------------------- */
+.nx-app {
+  display: grid;
+  grid-template-rows: 56px 1fr;
+  height: 100vh;
+  width: 100vw;
+  background: var(--bg-canvas);
+}
+.nx-app__main {
+  position: relative;
+  display: grid;
+  /* Both side columns are min-content so they hug their own animated widths;
+     transitioning child width is reliable across browsers, unlike animating
+     grid-template-columns directly with mixed 1fr + length values. */
+  grid-template-columns: min-content 1fr min-content;
+  min-height: 0;
+  gap: var(--bw-hair);
+}
+
+/* Left column wrapper — mirrors .nx-app__right structurally so the same
+   collapse mechanics apply to both sides ("Deep Focus" mode = both folded).
+   overflow: visible at this layer so the floating toggle handle can escape
+   into the canvas area without being clipped. The INNER content wrapper
+   handles the actual clipping during collapse animation. */
+.nx-app__left {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: var(--col-left);
+  overflow: visible;
+  border-right: var(--bw-hair) solid var(--border);
+  transition: width 360ms cubic-bezier(0.65, 0.05, 0.35, 1);
+}
+.nx-app__main--left-collapsed .nx-app__left {
+  width: 40px;
+}
+.nx-app__left-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: var(--col-left);
+  overflow: hidden; /* clip the 320px-wide content while the column shrinks */
+  transition: opacity 240ms cubic-bezier(0.65, 0.05, 0.35, 1);
+}
+.nx-app__main--left-collapsed .nx-app__left-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Left toggle — anchored to the column's RIGHT edge and pulled 12px OUT into
+   the canvas so it floats above the radar instead of sitting inside the
+   command list (where it collided with content + native scrollbars).
+   Doubled-class specificity so this beats the base .nx-col-toggle's left
+   property regardless of source-order shuffling. */
+.nx-col-toggle.nx-col-toggle--left {
+  left: auto;
+  right: -12px;
+}
+
+/* Right column splits vertically: PropertyHUD on top, dev slot at bottom.
+   The width is the animated property — mechanical slide, weighted ease.
+   overflow: visible so the floating handle escapes; inner content wrapper
+   does the clipping. */
+.nx-app__right {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: var(--col-right);
+  overflow: visible;
+  border-left: var(--bw-hair) solid var(--border);
+  transition: width 360ms cubic-bezier(0.65, 0.05, 0.35, 1);
+}
+.nx-app__main--right-collapsed .nx-app__right {
+  width: 40px;
+}
+.nx-app__right-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Width pinned to the EXPANDED column width so children don't reflow during
+     the transition — they slide out as a rigid block, like a server rack
+     drawer. Pointer events are disabled at full collapse so the narrow handle
+     doesn't accidentally swallow clicks. */
+  width: var(--col-right);
+  overflow: hidden; /* clip the 380px-wide content while the column shrinks */
+  transition: opacity 240ms cubic-bezier(0.65, 0.05, 0.35, 1);
+}
+.nx-app__main--right-collapsed .nx-app__right-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Mechanical-handle toggle — a thin vertical bar that floats over the canvas
+   on the inner edge of each column. Pulled 12px OUT (negative offset) so it
+   never collides with column content or native scrollbars. z-index 100 keeps
+   it above the canvas + HUD overlays at all times. */
+.nx-col-toggle {
+  position: absolute;
+  top: 20px;
+  left: -12px;            /* default = right column → handle on column's left edge */
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 40px;
+  background: var(--bg-canvas);
+  color: var(--cyan);
+  border: 1px solid var(--cyan);
+  border-radius: 3px;
+  font: 600 var(--t-12)/1 var(--font-mono);
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(0, 191, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(0, 191, 255, 0.10),
+              0 0 12px rgba(0, 191, 255, 0.30),
+              inset 0 0 0 1px rgba(0, 191, 255, 0.06);
+  transition: background var(--dur-1) var(--ease-out),
+              color var(--dur-1) var(--ease-out),
+              box-shadow var(--dur-1) var(--ease-out);
+}
+.nx-col-toggle:hover {
+  background: rgba(0, 191, 255, 0.16);
+  color: var(--bone);
+  box-shadow: 0 0 0 1px var(--cyan),
+              0 0 18px rgba(0, 191, 255, 0.55),
+              inset 0 0 0 1px rgba(0, 191, 255, 0.20);
+}
+.nx-col-toggle:active {
+  background: rgba(0, 191, 255, 0.28);
+}
+.nx-app__right-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nx-app__right-main > .nx-prop    { flex: 1 1 auto; min-height: 0; }
+.nx-app__right-main > .nx-hist    { flex: 0 0 auto; }
+.nx-app__right-main > .nx-diffsum { flex: 0 0 auto; }
+.nx-app__right-dev {
+  flex: 0 0 auto;
+  border-top: var(--bw-hair) solid var(--border);
+  background: rgba(8, 10, 18, 0.78);
+}
+
+/* ---------- Generic side panel (left + right common) -------- */
+.nx-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-glass);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  color: var(--fg);
+  font-family: var(--font-body);
+  width: 100%;
+}
+.nx-cmd { border-right: var(--bw-hair) solid var(--border); }
+.nx-prop { flex: 1 1 auto; }
+
+.nx-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: var(--bw-hair) solid var(--border);
+}
+.nx-panel__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font: 500 var(--t-11)/1 var(--font-display);
+  letter-spacing: 0.14em;
+  color: var(--fg);
+  text-transform: uppercase;
+}
+.nx-panel__chev {
+  font: 500 var(--t-12)/1 var(--font-mono);
+  color: var(--fg-low);
+}
+.nx-panel__foot {
+  padding: var(--s-2) var(--s-4);
+  border-top: var(--bw-hair) solid var(--border);
+  letter-spacing: 0.06em;
+}
+
+/* ---------- CommandCenter (left) ---------------------------- */
+.nx-cmd { gap: 0; }
+.nx-cmd__status,
+.nx-cmd__list,
+.nx-cmd__voice {
+  padding: var(--s-3) var(--s-4);
+  border-bottom: var(--bw-hair) solid var(--border);
+}
+.nx-cmd__status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--s-2);
+}
+.nx-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-1);
+  font: 600 var(--t-10)/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  border: var(--bw-hair) solid currentColor;
+}
+.nx-status-pill::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+.nx-status-pill--cyan  { color: var(--cyan); }
+.nx-status-pill--amber { color: var(--amber); }
+.nx-status-pill--low   { color: var(--fg-low); }
+
+.nx-cmd__list ul {
+  list-style: none;
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nx-cmd__item {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 7px 8px;
+  border: var(--bw-hair) solid transparent;
+  border-radius: var(--r-1);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out),
+              border-color var(--dur-1) var(--ease-out);
+}
+.nx-cmd__item:hover {
+  background: rgba(0, 191, 255, 0.06);
+  border-color: rgba(0, 191, 255, 0.32);
+}
+.nx-cmd__bullet {
+  color: var(--fg-low);
+  font: 500 var(--t-12)/1 var(--font-mono);
+}
+.nx-cmd__label {
+  font: 500 var(--t-11)/1.2 var(--font-body);
+  color: var(--fg);
+}
+.nx-cmd__hotkey {
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--fg-low);
+}
+.nx-cmd__item--armed .nx-cmd__bullet     { color: var(--cyan); }
+.nx-cmd__item--armed .nx-cmd__label      { color: var(--bone); }
+.nx-cmd__item--listening .nx-cmd__bullet { color: var(--lime); text-shadow: 0 0 8px var(--lime); }
+.nx-cmd__item--listening .nx-cmd__label  { color: var(--lime-soft); }
+
+.nx-cmd__waveform {
+  display: flex;
+  gap: 3px;
+  align-items: end;
+  height: 32px;
+  margin-top: var(--s-2);
+}
+.nx-cmd__bar {
+  display: inline-block;
+  width: 3px;
+  background: var(--cyan);
+  border-radius: 1px;
+  box-shadow: 0 0 6px rgba(0, 191, 255, 0.55);
+  animation: nx-wave 1.4s var(--ease-linear) infinite;
+  height: 30%;
+}
+@keyframes nx-wave {
+  0%, 100% { height: 18%; opacity: 0.55; }
+  50%      { height: 100%; opacity: 1; }
+}
+
+/* ---------- PropertyHUD (right) ----------------------------- */
+.nx-prop {
+  overflow-y: auto;
+}
+.nx-prop__empty {
+  padding: var(--s-6) var(--s-4);
+  text-align: center;
+  border: 1px dashed var(--steel-hi);
+  margin: var(--s-4);
+  border-radius: var(--r-2);
+}
+.nx-prop__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+}
+.nx-prop__id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-2) var(--s-3);
+  border: var(--bw-hair) solid var(--border-glass);
+  border-radius: var(--r-1);
+  background: rgba(155, 108, 255, 0.06);
+}
+.nx-prop__id--lime   { border-color: rgba(222, 255, 154, 0.5); background: rgba(222, 255, 154, 0.06); }
+.nx-prop__id--cyan   { border-color: rgba(0, 191, 255, 0.4); background: rgba(0, 191, 255, 0.05); }
+.nx-prop__id--amber  { border-color: rgba(255, 178, 0, 0.4); background: rgba(255, 178, 0, 0.05); }
+.nx-prop__id--purple { border-color: rgba(155, 108, 255, 0.4); }
+.nx-prop__idval {
+  font: 600 var(--t-14)/1 var(--font-mono);
+  color: var(--fg);
+  letter-spacing: 0.08em;
+}
+
+.nx-prop__name { display: flex; flex-direction: column; gap: 2px; }
+
+.nx-prop__metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+.nx-prop__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--s-2);
+  background: var(--bg-glass-hi);
+  border: var(--bw-hair) solid var(--border-glass);
+  border-radius: var(--r-1);
+}
+.nx-prop__mhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nx-prop__mval {
+  font: 500 var(--t-12)/1 var(--font-mono);
+}
+.nx-prop__mval--cyan   { color: var(--cyan); }
+.nx-prop__mval--lime   { color: var(--lime); text-shadow: 0 0 6px rgba(222, 255, 154, 0.55); }
+.nx-prop__mval--amber  { color: var(--amber); }
+.nx-prop__mval--purple { color: var(--purple-soft); }
+.nx-prop__bar {
+  height: 3px;
+  background: var(--steel);
+  border-radius: var(--r-1);
+  overflow: hidden;
+}
+.nx-prop__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-1);
+  transition: width var(--dur-2) var(--ease-out);
+}
+.nx-prop__bar-fill--cyan   { background: var(--cyan);   box-shadow: 0 0 6px var(--cyan); }
+.nx-prop__bar-fill--lime   { background: var(--lime);   box-shadow: 0 0 8px var(--lime); }
+.nx-prop__bar-fill--amber  { background: var(--amber);  box-shadow: 0 0 6px var(--amber); }
+.nx-prop__bar-fill--purple { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+
+.nx-prop__spark {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--s-2);
+  border: var(--bw-hair) solid var(--border-glass);
+  border-radius: var(--r-1);
+  background: var(--bg-glass-hi);
+}
+.nx-prop__spark-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nx-prop__spark-empty {
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font: 400 9px/1 var(--font-mono);
+  color: var(--fg-low);
+  letter-spacing: 0.06em;
+}
+
+.nx-prop__sanction {
+  padding: var(--s-2) var(--s-3);
+  border: var(--bw-hair) solid var(--amber);
+  color: var(--amber);
+  background: rgba(255, 178, 0, 0.06);
+  border-radius: var(--r-1);
+  font: 600 var(--t-10)/1 var(--font-mono);
+  letter-spacing: 0.10em;
+}
+
+.nx-prop__flows ul {
+  list-style: none;
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nx-prop__flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border: var(--bw-hair) solid transparent;
+  border-radius: var(--r-1);
+  font: 500 var(--t-10)/1 var(--font-mono);
+  cursor: pointer;
+  transition: border-color var(--dur-1), background var(--dur-1);
+}
+.nx-prop__flow:hover {
+  background: rgba(155, 108, 255, 0.08);
+  border-color: rgba(155, 108, 255, 0.45);
+}
+.nx-prop__flow-peer { color: var(--bone-dim); letter-spacing: 0.06em; }
+.nx-prop__flow-usd  { color: var(--fg-low); }
+.nx-prop__flow--anomaly .nx-prop__flow-peer { color: var(--lime); }
+.nx-prop__flow--anomaly .nx-prop__flow-usd  { color: var(--lime-dim); }
+
+/* ---------- DiffSummaryCard (right-column footer in diff mode) - */
+.nx-diffsum {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--s-3) var(--s-4);
+  border-top: var(--bw-hair) solid rgba(255, 178, 0, 0.32);
+  background: rgba(8, 10, 18, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.nx-diffsum__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nx-diffsum__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font: 500 var(--t-10)/1 var(--font-display);
+  letter-spacing: 0.14em;
+  color: var(--fg);
+  text-transform: uppercase;
+}
+.nx-diffsum__count {
+  letter-spacing: 0.10em;
+  font-size: 9px;
+}
+
+.nx-diffsum__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.nx-diffsum__tile {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid;
+  border-radius: var(--r-1);
+  background: rgba(0, 0, 0, 0.22);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color var(--dur-1) var(--ease-out),
+              background  var(--dur-1) var(--ease-out),
+              box-shadow  var(--dur-1) var(--ease-out);
+}
+.nx-diffsum__tile--amber {
+  border-color: rgba(255, 178, 0, 0.42);
+  background:   rgba(255, 178, 0, 0.05);
+}
+.nx-diffsum__tile--cyan {
+  border-color: rgba(0, 191, 255, 0.42);
+  background:   rgba(0, 191, 255, 0.05);
+}
+.nx-diffsum__tile:hover {
+  border-color: rgba(0, 191, 255, 0.85);
+}
+/* Active filter — strong cyan inset glow regardless of the tile's tone. The
+   active state is filter-pressed UI, distinct from the data-tone color. */
+.nx-diffsum__tile--active {
+  border-color: var(--cyan) !important;
+  background: rgba(0, 191, 255, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 191, 255, 0.55),
+              inset 0 0 18px rgba(0, 191, 255, 0.30),
+              0 0 14px rgba(0, 191, 255, 0.45);
+}
+.nx-diffsum__val {
+  font: 700 22px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.nx-diffsum__tile--amber .nx-diffsum__val {
+  color: var(--amber);
+  text-shadow: 0 0 8px rgba(255, 178, 0, 0.55);
+}
+.nx-diffsum__tile--cyan .nx-diffsum__val {
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 191, 255, 0.55);
+}
+.nx-diffsum__lbl {
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--fg-low);
+}
+
+.nx-diffsum__footer {
+  appearance: none;
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 4px 2px;
+  border: none;
+  border-top: 1px dashed rgba(255, 178, 0, 0.18);
+  background: transparent;
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--fg-low);
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--dur-1) var(--ease-out);
+}
+.nx-diffsum__footer:hover {
+  color: var(--cyan);
+}
+.nx-diffsum__footer-val {
+  color: var(--bone-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- CaptureHistory (right column footer) ----------- */
+.nx-hist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--s-3) var(--s-4);
+  border-top: var(--bw-hair) solid var(--border);
+  background: rgba(8, 10, 18, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.nx-hist__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nx-hist__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font: 500 var(--t-10)/1 var(--font-display);
+  letter-spacing: 0.14em;
+  color: var(--fg);
+  text-transform: uppercase;
+}
+.nx-hist__count { letter-spacing: 0.1em; }
+
+.nx-hist__empty {
+  padding: var(--s-3);
+  border: 1px dashed var(--steel-hi);
+  border-radius: var(--r-1);
+  text-align: center;
+  font: 400 9px/1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--fg-low);
+}
+
+.nx-hist__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nx-hist__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 7px;
+  border: 1px solid rgba(0, 191, 255, 0.14);
+  border-radius: var(--r-1);
+  background: rgba(0, 191, 255, 0.025);
+  transition: border-color var(--dur-2) var(--ease-out),
+              background  var(--dur-2) var(--ease-out);
+}
+.nx-hist__item:hover {
+  border-color: rgba(0, 191, 255, 0.45);
+  background: rgba(0, 191, 255, 0.06);
+}
+.nx-hist__item--pulse {
+  animation: nx-hist-pulse 700ms var(--ease-out);
+}
+@keyframes nx-hist-pulse {
+  0%   { border-color: rgba(0, 191, 255, 1.00);
+         box-shadow: 0 0 12px rgba(0, 191, 255, 0.55),
+                     inset 0 0 12px rgba(0, 191, 255, 0.18); }
+  60%  { border-color: rgba(0, 191, 255, 0.55);
+         box-shadow: 0 0 4px rgba(0, 191, 255, 0.20); }
+  100% { border-color: rgba(0, 191, 255, 0.14);
+         box-shadow: none; }
+}
+
+.nx-hist__row {
+  display: grid;
+  grid-template-columns: 22px 56px 1fr 50px auto;
+  align-items: center;
+  gap: 6px;
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  /* Dim cyan baseline at ~55% so additional emphasis (hover, pulse) reads */
+  color: rgba(111, 217, 255, 0.55);
+}
+.nx-hist__idx   { color: var(--fg-low); }
+.nx-hist__time  { color: rgba(111, 217, 255, 0.85); }
+.nx-hist__nodes { color: var(--fg-dim); text-align: right; }
+.nx-hist__size  { color: var(--fg-low); text-align: right; }
+
+.nx-hist__redl {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(0, 191, 255, 0.45);
+  color: var(--cyan);
+  padding: 2px 5px;
+  border-radius: 2px;
+  font: 600 8px/1 var(--font-mono);
+  letter-spacing: 0.10em;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out),
+              color var(--dur-1) var(--ease-out);
+}
+.nx-hist__redl:hover {
+  background: rgba(0, 191, 255, 0.14);
+  color: var(--bone);
+}
+
+.nx-hist__fname {
+  font: 400 8px/1.2 var(--font-mono);
+  color: var(--fg-low);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Top bar ----------------------------------------- */
+.nx-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  padding: 0 var(--s-4);
+  gap: var(--s-6);
+  border-bottom: var(--bw-hair) solid var(--border);
+  background: linear-gradient(
+    180deg,
+    rgba(11, 11, 24, 0.92) 0%,
+    rgba(11, 11, 24, 0.7) 100%
+  );
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  z-index: 10;
+}
+.nx-top__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.nx-top__name { display: flex; flex-direction: column; line-height: 1; }
+.nx-top__nx {
+  font: 600 var(--t-14)/1 var(--font-display);
+  letter-spacing: 0.18em;
+  color: var(--fg);
+}
+.nx-top__sub {
+  margin-top: 3px;
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.10em;
+  color: var(--fg-low);
+}
+.nx-top__nav {
+  display: flex;
+  gap: var(--s-1);
+  justify-self: center;
+}
+.nx-tab {
+  appearance: none;
+  background: transparent;
+  border: var(--bw-hair) solid transparent;
+  padding: 6px 12px;
+  font: 500 var(--t-10)/1 var(--font-display);
+  letter-spacing: 0.10em;
+  color: var(--fg-dim);
+  cursor: pointer;
+  border-radius: var(--r-1);
+  transition: color var(--dur-1) var(--ease-out),
+              border-color var(--dur-1) var(--ease-out),
+              background var(--dur-1) var(--ease-out);
+}
+.nx-tab:hover {
+  color: var(--fg);
+  border-color: var(--steel-hi);
+}
+.nx-tab--active {
+  color: var(--cyan);
+  border-color: rgba(0, 191, 255, 0.4);
+  background: rgba(0, 191, 255, 0.06);
+}
+.nx-top__status {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+/* API panel */
+.nx-api {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  padding: 4px 10px;
+  border: var(--bw-hair) solid var(--border-glass);
+  border-radius: var(--r-1);
+  background: var(--bg-glass);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  min-width: 168px;
+}
+.nx-api__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nx-api__sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.nx-api__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.nx-api__metrics {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+/* Connection state pill — placed left of the API sparkline.
+   Strict semantic palette: cyan = healthy, amber = transient/attention,
+   purple = recovery, slate-low = off. Lime is reserved for market anomaly. */
+.nx-conn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: var(--bw-hair) solid currentColor;
+  border-radius: var(--r-1);
+  font: 600 9px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  background: var(--bg-glass);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: color var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out);
+}
+.nx-conn-pill__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.nx-conn-pill__txt { white-space: nowrap; }
+
+.nx-conn-pill--cyan   { color: var(--cyan); }
+.nx-conn-pill--amber  { color: var(--amber); }
+.nx-conn-pill--purple { color: var(--purple-soft); }
+.nx-conn-pill--low    { color: var(--fg-low); border-color: var(--steel-hi); }
+.nx-conn-pill--low .nx-conn-pill__dot { box-shadow: none; }
+
+/* Motion variants */
+.nx-conn-pill__dot--pulse {
+  animation: nx-pulse var(--dur-loop) var(--ease-out) infinite;
+}
+.nx-conn-pill__dot--blink {
+  animation: nx-blink 600ms var(--ease-linear) infinite;
+}
+@keyframes nx-blink {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.7); }
+}
+
+/* SSO chip */
+.nx-sso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: var(--bw-hair) solid var(--border-glass);
+  border-radius: var(--r-1);
+  color: var(--cyan);
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.10em;
+}
+.nx-sso__txt { white-space: nowrap; }
+
+/* Pulsing dot */
+.nx-dot--pulse {
+  position: relative;
+  animation: nx-pulse var(--dur-loop) var(--ease-out) infinite;
+}
+@keyframes nx-pulse {
+  0%, 100% { box-shadow: 0 0 6px currentColor; opacity: 0.95; }
+  50%      { box-shadow: 0 0 14px currentColor; opacity: 0.55; }
+}
+
+/* ---------- Canvas wrapper ---------------------------------- */
+.nx-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    ellipse at center,
+    #0a0d1f 0%,
+    var(--void) 70%
+  );
+  overflow: hidden;
+}
+.nx-canvas__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.nx-canvas__noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image:
+    radial-gradient(rgba(255,255,255,0.4) 1px, transparent 1px),
+    radial-gradient(rgba(255,255,255,0.25) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 1px;
+}
+.nx-canvas__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+.nx-canvas__grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image:
+    linear-gradient(rgba(0, 191, 255, 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 191, 255, 0.6) 1px, transparent 1px);
+  background-size: 64px 64px, 64px 64px;
+}
+
+/* HUD overlays in the four canvas corners */
+.nx-canvas__hud-tl,
+.nx-canvas__hud-tr,
+.nx-canvas__hud-bl,
+.nx-canvas__hud-br {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+}
+.nx-canvas__hud-tl { top: var(--s-4); left: var(--s-4); }
+.nx-canvas__hud-tr { top: var(--s-4); right: var(--s-4); }
+.nx-canvas__hud-bl { bottom: var(--s-4); left: var(--s-4); }
+.nx-canvas__hud-br { bottom: var(--s-4); right: var(--s-4); }
+
+/* Cluster legend */
+.nx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border: var(--bw-hair) solid var(--border-glass);
+  border-radius: var(--r-1);
+  background: var(--bg-glass);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font: 400 9px/1.3 var(--font-mono);
+  color: var(--fg-dim);
+  letter-spacing: 0.04em;
+}
+.nx-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.nx-legend__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--cyan);
+}
+
+/* Form controls used by the harness panel — keep minimal so the
+   inline styles in NexusTestbed.tsx stay authoritative. */
+input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; background: var(--steel); border-radius: var(--r-1); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: var(--r-pill); background: var(--cyan); cursor: pointer; box-shadow: var(--glow-soft); }
+input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius: var(--r-pill); background: var(--cyan); cursor: pointer; border: none; }
+button { font-family: var(--font-mono); }

@@ -1,0 +1,189 @@
+/* ============================================================
+   NEXUS OS — Design Tokens
+   Single source of truth for color, type, spacing, motion.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ---------- COLOR — base ---------- */
+  --void:          #050510;   /* canvas background */
+  --carbon:        #0B0B18;   /* panel BG, lowest elevation */
+  --graphite:      #11121F;   /* panel BG, mid elevation */
+  --slate-deep:    #161827;   /* panel BG, highest elevation */
+  --steel:         #1B1D2E;   /* hairline borders, dividers */
+  --steel-hi:      #2A2D44;   /* hover-state borders */
+
+  --bone:          #E8ECF5;   /* primary fg */
+  --bone-dim:      #C5CADC;   /* primary fg @ 85% */
+  --ash:           #8A93A8;   /* secondary fg, captions */
+  --slate:         #4A5066;   /* tertiary, disabled, scaffolding */
+  --slate-low:     #2F3447;   /* lowest text rank */
+
+  /* ---------- COLOR — accent ---------- */
+  --cyan:          #00BFFF;   /* primary accent — links, live data, selection (Electric Blue) */
+  --cyan-soft:     #6FD9FF;
+  --cyan-dim:      #0078A8;
+  --lime:          #DEFF9A;   /* critical anomaly highlight (Neon Lime) */
+  --lime-soft:     #ECFFC4;
+  --lime-dim:      #98C758;
+  --amber:         #FFB200;   /* secondary warning */
+  --amber-soft:    #FFD166;
+  --amber-dim:     #B27800;
+  --purple:        #9B6CFF;   /* tertiary, AI-derived */
+  --purple-soft:   #BFA3FF;
+  --purple-dim:    #6E47C7;
+  --crimson:       #FF3355;   /* critical errors only */
+  --emerald:       #00D58A;   /* confirmed / committed */
+
+  /* ---------- COLOR — semantic ---------- */
+  --bg-canvas:     var(--void);
+  --bg-panel:      var(--carbon);
+  --bg-panel-hi:   var(--graphite);
+  --bg-glass:      rgba(11, 11, 24, 0.55);
+  --bg-glass-hi:   rgba(22, 24, 39, 0.72);
+
+  --fg:            var(--bone);
+  --fg-dim:        var(--ash);
+  --fg-low:        var(--slate);
+
+  --border:        var(--steel);
+  --border-hi:     rgba(0, 229, 255, 0.35);
+  --border-glass:  rgba(0, 229, 255, 0.18);
+
+  --accent:        var(--cyan);
+  --anomaly:       var(--lime);
+  --warn:          var(--amber);
+  --info:          var(--purple);
+  --crit:          var(--crimson);
+  --ok:            var(--emerald);
+
+  /* ---------- GLOW ---------- */
+  --glow-cyan:    0 0 0 1px rgba(0, 191, 255, 0.4),
+                  0 0 12px rgba(0, 191, 255, 0.45),
+                  0 0 32px rgba(0, 191, 255, 0.25);
+  --glow-lime:    0 0 0 1px rgba(222, 255, 154, 0.5),
+                  0 0 14px rgba(222, 255, 154, 0.55),
+                  0 0 36px rgba(222, 255, 154, 0.3);
+  --glow-amber:   0 0 0 1px rgba(255, 178, 0, 0.4),
+                  0 0 12px rgba(255, 178, 0, 0.45),
+                  0 0 32px rgba(255, 178, 0, 0.25);
+  --glow-purple:  0 0 0 1px rgba(155, 108, 255, 0.4),
+                  0 0 12px rgba(155, 108, 255, 0.45),
+                  0 0 32px rgba(155, 108, 255, 0.25);
+  --glow-soft:    0 0 24px rgba(0, 191, 255, 0.18);
+
+  /* ---------- TYPE — families ---------- */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* ---------- TYPE — sizes ---------- */
+  --t-9:   9px;     /* metadata, leaders */
+  --t-10: 10px;     /* HUD captions */
+  --t-11: 11px;     /* HUD body — workhorse */
+  --t-12: 12px;     /* labels */
+  --t-13: 13px;     /* chat / freeform body */
+  --t-14: 14px;     /* panel titles */
+  --t-16: 16px;     /* section headers */
+  --t-20: 20px;     /* large numbers, hero values */
+  --t-24: 24px;     /* hero / display */
+  --t-32: 32px;     /* canvas overlay numbers */
+
+  /* ---------- TYPE — semantic roles ---------- */
+  --type-h1: 600 var(--t-24)/1.15 var(--font-display);
+  --type-h2: 600 var(--t-16)/1.2 var(--font-display);
+  --type-h3: 600 var(--t-14)/1.25 var(--font-display);
+  --type-label: 500 var(--t-10)/1.2 var(--font-display);
+  --type-body: 400 var(--t-13)/1.5 var(--font-body);
+  --type-caption: 400 var(--t-11)/1.4 var(--font-body);
+  --type-mono: 400 var(--t-11)/1.45 var(--font-mono);
+  --type-mono-hi: 500 var(--t-12)/1.45 var(--font-mono);
+  --type-code: 400 var(--t-11)/1.45 var(--font-mono);
+  --type-data-num: 500 var(--t-20)/1.0 var(--font-mono);
+  --type-canvas-num: 500 var(--t-32)/1.0 var(--font-mono);
+
+  /* ---------- TRACKING ---------- */
+  --track-label: 0.08em;     /* uppercase labels */
+  --track-display: -0.01em;  /* display headers, optical */
+  --track-body: 0;
+  --track-mono: 0;
+
+  /* ---------- SPACING (4px base) ---------- */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-12: 48px;
+  --s-16: 64px;
+
+  /* ---------- RADII ---------- */
+  --r-sharp: 0;
+  --r-1: 2px;       /* buttons, inputs, chips */
+  --r-2: 4px;       /* panels, cards */
+  --r-pill: 9999px; /* status dots only */
+
+  /* ---------- BORDERS ---------- */
+  --bw-hair: 1px;
+  --bw-thick: 2px;
+
+  /* ---------- MOTION ---------- */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in:  cubic-bezier(0.6, 0, 0.8, 0.4);
+  --ease-linear: linear;
+  --dur-1: 120ms;   /* hover */
+  --dur-2: 220ms;   /* state change */
+  --dur-3: 600ms;   /* panel reveal */
+  --dur-loop: 2400ms;
+
+  /* ---------- LAYOUT ---------- */
+  --col-left: 320px;
+  --col-right: 380px;
+  --rail: 56px;     /* collapsed icon rail width */
+}
+
+/* ============================================================
+   Element defaults
+   ============================================================ */
+.nx-h1 { font: var(--type-h1); letter-spacing: var(--track-display); color: var(--fg); }
+.nx-h2 { font: var(--type-h2); letter-spacing: var(--track-display); color: var(--fg); }
+.nx-h3 { font: var(--type-h3); color: var(--fg); }
+.nx-label {
+  font: var(--type-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.nx-body { font: var(--type-body); color: var(--fg); }
+.nx-caption { font: var(--type-caption); color: var(--fg-dim); }
+.nx-mono { font: var(--type-mono); color: var(--fg); }
+.nx-mono-dim { font: var(--type-mono); color: var(--fg-dim); }
+.nx-code { font: var(--type-code); color: var(--cyan); }
+.nx-data-num { font: var(--type-data-num); color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* Status dots */
+.nx-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--cyan);
+  box-shadow: 0 0 8px currentColor;
+}
+.nx-dot--cyan   { background: var(--cyan);   color: var(--cyan); }
+.nx-dot--amber  { background: var(--amber);  color: var(--amber); }
+.nx-dot--purple { background: var(--purple); color: var(--purple); }
+.nx-dot--ok     { background: var(--ok);     color: var(--ok); }
+.nx-dot--crit   { background: var(--crit);   color: var(--crit); }
+.nx-dot--off    { background: var(--slate);  color: transparent; box-shadow: none; }
+
+/* Glassmorphism panel */
+.nx-glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: var(--bw-hair) solid var(--border-glass);
+  border-radius: var(--r-2);
+}
