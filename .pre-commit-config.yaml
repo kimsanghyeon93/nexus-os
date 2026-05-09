@@ -1,0 +1,57 @@
+# Pre-commit hooks for the NEXUS OS frontend.
+#
+# Mirrors the CI gates (.github/workflows/frontend.yml) so an issue is
+# caught at `git commit` instead of after a CI round-trip. Same setup
+# steps as the backend repo:
+#
+#   pipx install pre-commit
+#   pre-commit install
+#
+# Notes for this repo specifically:
+#   • The TS / ESLint hooks shell out to npx, NOT to mirrored upstream
+#     hook repos. We pin tool versions in package.json + the lockfile
+#     so the hooks stay in lockstep with CI without a separate version
+#     to drift.
+#   • Hooks run on the WHOLE source tree, not just the changed files,
+#     because `tsc -b` only knows project-wide consistency — a single
+#     stale .ts file can break a transitive import elsewhere.
+
+repos:
+  # ── Hygiene — stdlib hooks ────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        # CSS / TS / TSX / JSON / YAML — all of source.
+        types_or: [css, ts, tsx, json, yaml, markdown]
+      - id: end-of-file-fixer
+        types_or: [css, ts, tsx, json, yaml, markdown]
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+
+  # ── TS strict + ESLint — the two CI gates from frontend.yml ───────
+  - repo: local
+    hooks:
+      - id: tsc-strict
+        name: tsc -b --noEmit (strict)
+        entry: npx tsc -b --noEmit
+        language: system
+        # Trigger only if a .ts/.tsx/tsconfig file changed; tsc still
+        # walks the whole project graph.
+        files: \.(ts|tsx)$|tsconfig.*\.json$
+        pass_filenames: false
+
+      - id: eslint
+        name: eslint . --max-warnings 0
+        entry: npx eslint . --max-warnings 0
+        language: system
+        files: \.(ts|tsx|js|mjs|cjs)$|eslint\.config\.js$
+        pass_filenames: false
+
+default_install_hook_types: [pre-commit]
+default_stages: [pre-commit]
+fail_fast: false
