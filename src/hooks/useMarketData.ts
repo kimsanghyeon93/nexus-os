@@ -95,7 +95,7 @@ function buildDataset(): NexusDataset {
     });
   });
 
-  placeMembers(CLUSTERS[0], [
+  placeMembers(CLUSTERS[0]!, [
     { id: 'FED',  label: 'US Federal Reserve',     type: 'central_bank', jurisdiction: 'US', founded: 1913, anomaly: 0.05, sanctioned: false, txVol: 8400 },
     { id: 'ECB',  label: 'European Central Bank',  type: 'central_bank', jurisdiction: 'EU', founded: 1998, anomaly: 0.07, sanctioned: false, txVol: 6100 },
     { id: 'BOJ',  label: 'Bank of Japan',          type: 'central_bank', jurisdiction: 'JP', founded: 1882, anomaly: 0.12, sanctioned: false, txVol: 3700 },
@@ -105,7 +105,7 @@ function buildDataset(): NexusDataset {
     { id: 'RBI',  label: 'Reserve Bank of India',  type: 'central_bank', jurisdiction: 'IN', founded: 1935, anomaly: 0.18, sanctioned: false, txVol: 1900 },
   ], 1);
 
-  placeMembers(CLUSTERS[1], [
+  placeMembers(CLUSTERS[1]!, [
     { id: 'UST10', label: 'US 10Y Treasury',  type: 'bond', jurisdiction: 'US', anomaly: 0.22, sanctioned: false, txVol: 5800 },
     { id: 'UST2',  label: 'US 2Y Treasury',   type: 'bond', jurisdiction: 'US', anomaly: 0.41, sanctioned: false, txVol: 4200 },
     { id: 'BUND',  label: 'German Bund 10Y',  type: 'bond', jurisdiction: 'DE', anomaly: 0.14, sanctioned: false, txVol: 2900 },
@@ -115,7 +115,7 @@ function buildDataset(): NexusDataset {
     { id: 'OAT',   label: 'French OAT 10Y',   type: 'bond', jurisdiction: 'FR', anomaly: 0.24, sanctioned: false, txVol: 1100 },
   ], 2);
 
-  placeMembers(CLUSTERS[2], [
+  placeMembers(CLUSTERS[2]!, [
     { id: 'XLK',  label: 'Tech Sector',         type: 'equity_sector', jurisdiction: 'US', anomaly: 0.31, sanctioned: false, txVol: 4400 },
     { id: 'XLF',  label: 'Financials Sector',   type: 'equity_sector', jurisdiction: 'US', anomaly: 0.27, sanctioned: false, txVol: 3700 },
     { id: 'XLE',  label: 'Energy Sector',       type: 'equity_sector', jurisdiction: 'US', anomaly: 0.62, sanctioned: false, txVol: 2900 },
@@ -127,7 +127,7 @@ function buildDataset(): NexusDataset {
     { id: 'SMH',  label: 'Semiconductors',      type: 'equity_sector', jurisdiction: 'US', anomaly: 0.78, sanctioned: false, txVol: 3300 },
   ], 3);
 
-  placeMembers(CLUSTERS[3], [
+  placeMembers(CLUSTERS[3]!, [
     { id: 'EURUSD', label: 'EUR / USD', type: 'fx', jurisdiction: '—', anomaly: 0.18, sanctioned: false, txVol: 5400 },
     { id: 'USDJPY', label: 'USD / JPY', type: 'fx', jurisdiction: '—', anomaly: 0.66, sanctioned: false, txVol: 4100 },
     { id: 'GBPUSD', label: 'GBP / USD', type: 'fx', jurisdiction: '—', anomaly: 0.22, sanctioned: false, txVol: 2300 },
@@ -137,7 +137,7 @@ function buildDataset(): NexusDataset {
     { id: 'USDTRY', label: 'USD / TRY', type: 'fx', jurisdiction: '—', anomaly: 0.92, sanctioned: false, txVol:  680 },
   ], 4);
 
-  placeMembers(CLUSTERS[4], [
+  placeMembers(CLUSTERS[4]!, [
     { id: 'WTI',   label: 'WTI Crude',   type: 'commodity', jurisdiction: '—', anomaly: 0.69, sanctioned: false, txVol: 3100 },
     { id: 'BRT',   label: 'Brent Crude', type: 'commodity', jurisdiction: '—', anomaly: 0.61, sanctioned: false, txVol: 2700 },
     { id: 'XAU',   label: 'Gold',        type: 'commodity', jurisdiction: '—', anomaly: 0.34, sanctioned: false, txVol: 4800 },
@@ -147,7 +147,7 @@ function buildDataset(): NexusDataset {
     { id: 'WHEAT', label: 'Wheat',       type: 'commodity', jurisdiction: '—', anomaly: 0.46, sanctioned: false, txVol:  610 },
   ], 5);
 
-  placeMembers(CLUSTERS[5], [
+  placeMembers(CLUSTERS[5]!, [
     { id: 'BTC',      label: 'Bitcoin',         type: 'crypto',   jurisdiction: '—',  anomaly: 0.54, sanctioned: false, txVol: 4200 },
     { id: 'ETH',      label: 'Ether',           type: 'crypto',   jurisdiction: '—',  anomaly: 0.48, sanctioned: false, txVol: 3100 },
     { id: 'USDT',     label: 'Tether',          type: 'crypto',   jurisdiction: 'AE', anomaly: 0.71, sanctioned: false, txVol: 5800 },
@@ -157,7 +157,7 @@ function buildDataset(): NexusDataset {
     { id: 'CYGNUS',   label: 'Cygnus Exchange', type: 'exchange', jurisdiction: 'SG', anomaly: 0.21, sanctioned: false, txVol: 2240 },
   ], 6);
 
-  placeMembers(CLUSTERS[6], [
+  placeMembers(CLUSTERS[6]!, [
     { id: 'CPI_US',  label: 'US CPI YoY',          type: 'macro', jurisdiction: 'US', anomaly: 0.61, sanctioned: false, txVol: 3200 },
     { id: 'NFP',     label: 'Nonfarm Payrolls',    type: 'macro', jurisdiction: 'US', anomaly: 0.34, sanctioned: false, txVol: 2100 },
     { id: 'PMI_US',  label: 'US ISM PMI',          type: 'macro', jurisdiction: 'US', anomaly: 0.42, sanctioned: false, txVol: 1100 },
@@ -168,7 +168,7 @@ function buildDataset(): NexusDataset {
     { id: 'DXY',     label: 'DXY (USD Index)',     type: 'macro', jurisdiction: '—',  anomaly: 0.36, sanctioned: false, txVol: 3300 },
   ], 7);
 
-  placeMembers(CLUSTERS[7], [
+  placeMembers(CLUSTERS[7]!, [
     { id: 'BAKU_TR', label: 'Baku Transit LLC',  type: 'corporation', jurisdiction: 'AZ',  anomaly: 0.88, sanctioned: true,  txVol: 410 },
     { id: 'OBSIDIAN',label: 'Obsidian Holdings', type: 'holding',     jurisdiction: 'KY',  anomaly: 0.91, sanctioned: false, txVol: 980 },
     { id: 'NORDSEE', label: 'NordSee Treuhand',  type: 'bank',        jurisdiction: 'CH',  anomaly: 0.74, sanctioned: false, txVol: 1610 },
@@ -221,7 +221,7 @@ function buildDataset(): NexusDataset {
   });
 
   // KRX cluster
-  placeMembers(CLUSTERS[8], [
+  placeMembers(CLUSTERS[8]!, [
     { id: 'KRX_SEMI', label: 'KRX Semiconductors', type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.74, sanctioned: false, txVol: 3900 },
     { id: 'KRX_BATT', label: 'KRX Battery / EV',   type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.62, sanctioned: false, txVol: 2100 },
     { id: 'KRX_AUTO', label: 'KRX Automotive',     type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.34, sanctioned: false, txVol: 1700 },
@@ -260,7 +260,7 @@ function buildDataset(): NexusDataset {
   // Mutated in real-time by MomentumStreamer instead of routing through sector
   // aggregations. Each ticker is connected to its primary US sector entity so
   // the cascading wave from a Momentum shock still reaches the broader graph.
-  placeMembers(CLUSTERS[9], [
+  placeMembers(CLUSTERS[9]!, [
     { id: 'AAPL',  label: 'Apple Inc.',          type: 'us_equity', jurisdiction: 'US', anomaly: 0.18, sanctioned: false, txVol: 2800 },
     { id: 'MSFT',  label: 'Microsoft Corp.',     type: 'us_equity', jurisdiction: 'US', anomaly: 0.16, sanctioned: false, txVol: 2750 },
     { id: 'NVDA',  label: 'NVIDIA Corp.',        type: 'us_equity', jurisdiction: 'US', anomaly: 0.42, sanctioned: false, txVol: 1200 },
@@ -323,35 +323,41 @@ function buildDataset(): NexusDataset {
     });
   });
 
-  // Degree
+  // Degree — Record<string, number | undefined> after noUncheckedIndexedAccess.
+  // Keys are seeded from ENTITIES, so for any well-formed t.from/t.to in TX
+  // the lookup IS defined; we narrow into a local before mutating.
   const degree: Record<string, number> = Object.fromEntries(ENTITIES.map(e => [e.id, 0]));
   TX.forEach(t => {
-    if (degree[t.from] != null) degree[t.from]++;
-    if (degree[t.to]   != null) degree[t.to]++;
+    const dFrom = degree[t.from]; if (dFrom !== undefined) degree[t.from] = dFrom + 1;
+    const dTo   = degree[t.to];   if (dTo   !== undefined) degree[t.to]   = dTo   + 1;
   });
 
-  // Eigenvector centrality (power iter on weighted adj)
+  // Eigenvector centrality (power iter on weighted adj). Indices into the
+  // square Float64Array matrix `A` are bounded by N; the `!` assertions below
+  // capture the loop-invariant safety that strict typed-array indexing can't
+  // see. Rewriting as named locals would dominate the hot path's allocation cost.
   const idx: Record<string, number> = Object.fromEntries(ENTITIES.map((e, i) => [e.id, i]));
   const N = ENTITIES.length;
   const A: Float64Array[] = Array.from({ length: N }, () => new Float64Array(N));
   TX.forEach(t => {
-    if (idx[t.from] == null || idx[t.to] == null) return;
+    const fi = idx[t.from]; const ti = idx[t.to];
+    if (fi === undefined || ti === undefined) return;
     const w = Math.log10(t.usd);
-    A[idx[t.from]][idx[t.to]] += w;
-    A[idx[t.to]][idx[t.from]] += w;
+    const rowF = A[fi]!; rowF[ti] = (rowF[ti] ?? 0) + w;
+    const rowT = A[ti]!; rowT[fi] = (rowT[fi] ?? 0) + w;
   });
   let v = new Float64Array(N).fill(1 / Math.sqrt(N));
   for (let it = 0; it < 60; it++) {
     const nv = new Float64Array(N);
-    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) nv[i] += A[i][j] * v[j];
-    let norm = 0; for (let i = 0; i < N; i++) norm += nv[i] * nv[i];
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) nv[i]! += A[i]![j]! * v[j]!;
+    let norm = 0; for (let i = 0; i < N; i++) norm += nv[i]! * nv[i]!;
     norm = Math.sqrt(norm) || 1;
-    for (let i = 0; i < N; i++) nv[i] /= norm;
+    for (let i = 0; i < N; i++) nv[i]! /= norm;
     v = nv;
   }
   ENTITIES.forEach((e, i) => {
-    e.degree = degree[e.id] || 0;
-    e.eigen = +v[i].toFixed(4);
+    e.degree = degree[e.id] ?? 0;
+    e.eigen  = +v[i]!.toFixed(4);
   });
 
   return { ENTITIES, TX, CLUSTERS };

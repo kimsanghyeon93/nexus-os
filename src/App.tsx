@@ -110,10 +110,13 @@ export default function App({
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>('OBSIDIAN');
   const isControlled = controlledSelectedId !== undefined;
   const selectedId = isControlled ? controlledSelectedId : internalSelectedId;
-  const setSelectedId = (id: string | null) => {
+  // Memoized so the shock-target useEffect (and any future consumers) get a
+  // stable identity across renders — react-hooks/exhaustive-deps relies on
+  // referential equality to know when "unchanged" really means unchanged.
+  const setSelectedId = useCallback((id: string | null) => {
     if (!isControlled) setInternalSelectedId(id);
     onSelectedChange?.(id);
-  };
+  }, [isControlled, onSelectedChange]);
 
   // Promote anomaly shocks to selection so the existing 4-hop BFS wave fires.
   // null → target on a separate task to guarantee RadarCanvas's [selectedId]
@@ -123,7 +126,7 @@ export default function App({
     setSelectedId(null);
     const t = setTimeout(() => setSelectedId(shockTarget.id), 0);
     return () => clearTimeout(t);
-  }, [shockTarget]);
+  }, [shockTarget, setSelectedId]);
 
   // Cinematic "system freeze" — flash the canvas borders + a faint overlay
   // for 250ms when a snapshot is captured. Token bumped on every capture so
@@ -149,7 +152,7 @@ export default function App({
       setSnapshotPulse(p => p + 1);
 
       setSnapshotHistory(prev => {
-        if (prev.length > 0 && prev[0].filename === meta.filename) return prev;
+        if (prev[0]?.filename === meta.filename) return prev;
         jsonCacheRef.current.set(meta.id, json);
         const next = [meta, ...prev].slice(0, HISTORY_MAX);
         // Evict cached JSON for entries that fell off the end (keep memory
@@ -297,7 +300,7 @@ export default function App({
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);
     };
-  }, [replayDataset]);
+  }, [replayDataset, diffSnapshot]);
 
   const selected = useMemo(
     () => ENTITIES.find(e => e.id === selectedId) || null,
@@ -323,8 +326,8 @@ export default function App({
         telemetry={telemetry}
         sso={sso}
         connectionState={connectionState}
-        sourceLabel={sourceLabel}
-        sourceKind={sourceKind}
+        {...(sourceLabel !== undefined ? { sourceLabel } : {})}
+        {...(sourceKind  !== undefined ? { sourceKind  } : {})}
       />
       <div
         className={

@@ -30,6 +30,12 @@ jobs:
       - name: Install (npm ci — uses lockfile)
         run: npm ci
 
+      - name: ESLint (0 warnings allowed)
+        # The lint baseline is the team contract — the local dev box runs
+        # this offline against the cached package set, but CI always has
+        # the registry available so npm ci pulls a clean lockfile install.
+        run: npm run lint -- --max-warnings 0
+
       - name: TypeScript strict check
         run: npx tsc --noEmit
 

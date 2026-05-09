@@ -181,15 +181,18 @@ export class HanTooStreamer implements IMarketStreamer {
   private stubCursor = 0;
 
   constructor(config: HanTooConfig = {}) {
+    // exactOptionalPropertyTypes: forbid `key: undefined`. Build the
+    // optional secrets via conditional spreads so absent values drop the
+    // key entirely instead of producing `key: undefined`.
     this.config = {
       restUrl:       config.restUrl       ?? DEFAULT_REST_URL,
       wsUrl:         config.wsUrl         ?? DEFAULT_WS_URL,
       subscriptions: config.subscriptions ?? DEFAULT_SUBSCRIPTIONS,
       reconnect:     config.reconnect     ?? DEFAULT_RECONNECT,
       stubMode:      config.stubMode      ?? true,
-      appKey:        config.appKey,
-      appSecret:     config.appSecret,
-      accessToken:   config.accessToken,
+      ...(config.appKey      !== undefined ? { appKey:      config.appKey      } : {}),
+      ...(config.appSecret   !== undefined ? { appSecret:   config.appSecret   } : {}),
+      ...(config.accessToken !== undefined ? { accessToken: config.accessToken } : {}),
     };
   }
 
@@ -468,6 +471,7 @@ export class HanTooStreamer implements IMarketStreamer {
     const subs = this.config.subscriptions;
     if (subs.length === 0) return;
     const sub = subs[this.stubCursor % subs.length];
+    if (!sub) return;
     this.stubCursor++;
 
     // Construct a fake KIS pipe-delimited payload so the same parser used in

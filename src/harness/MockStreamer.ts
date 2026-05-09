@@ -158,6 +158,7 @@ export class MockStreamer implements IMarketStreamer {
 
   private emit(): void {
     const id = SYM_POOL[(Math.random() * SYM_POOL.length) | 0];
+    if (id === undefined) return;
     // 4% of packets carry a small anomaly nudge; the rest are pure volume noise
     const mutateAnomaly = Math.random() < 0.04;
     const packet: MarketPacket = {

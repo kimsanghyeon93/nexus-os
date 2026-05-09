@@ -10,7 +10,7 @@ import type { EntityDelta } from '../../utils/diff';
 export interface PropertyHUDProps {
   entity: NexusEntity | null;
   transactions: NexusEdge[];
-  onSelect?: (id: string) => void;
+  onSelect?: ((id: string) => void) | undefined;
   /** When in diff mode, the per-entity deltas. Presence of an entry for the
    *  selected entity flips the metrics readout from absolutes to "+X%" deltas. */
   diffMap?: ReadonlyMap<string, EntityDelta> | null;
@@ -62,7 +62,7 @@ function NoTarget() {
 interface EntityCardProps {
   entity: NexusEntity;
   transactions: NexusEdge[];
-  onSelect?: (id: string) => void;
+  onSelect?: ((id: string) => void) | undefined;
   delta: EntityDelta | null;
 }
 
@@ -169,7 +169,7 @@ function Metric({ label, value, tone, barFraction }: MetricProps) {
 interface FlowListProps {
   title: string;
   edges: NexusEdge[];
-  onSelect?: (id: string) => void;
+  onSelect?: ((id: string) => void) | undefined;
   dir: 'in' | 'out';
 }
 function FlowList({ title, edges, onSelect, dir }: FlowListProps) {
@@ -284,7 +284,7 @@ function Sparkline({ values, tone }: SparklineProps) {
 
   // 0.7 line marks the lime danger threshold for visual reference
   const dangerY = H - 0.7 * H;
-  const last = values[values.length - 1];
+  const last = values[values.length - 1] ?? 0;
   const lastX = ((values.length - 1) / (SPARK_BUFFER - 1)) * W;
   const lastY = H - Math.max(0, Math.min(1, last)) * H;
 

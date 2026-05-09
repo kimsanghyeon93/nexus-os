@@ -272,6 +272,7 @@ export class MomentumStreamer implements IMarketStreamer {
   private emit(): void {
     if (this.symbols.length === 0) return;
     const symbol = this.symbols[this.cursor % this.symbols.length];
+    if (symbol === undefined) return;
     this.cursor++;
     const q = this.quoteCache.get(symbol);
     if (!q) return;
@@ -360,8 +361,8 @@ function parseGlobalQuote(symbol: string, raw: unknown): { price: number; change
   const obj = raw as Record<string, unknown>;
   const gq = obj['Global Quote'];
   if (!gq || typeof gq !== 'object') return null;
-  const q = gq as Record<string, string>;
-  const price = parseFloat(q['05. price']);
+  const q = gq as Record<string, string | undefined>;
+  const price = parseFloat(q['05. price'] ?? '');
   const changePctRaw = q['10. change percent'];
   const changePercent = changePctRaw ? parseFloat(changePctRaw.replace('%', '')) : 0;
   if (!Number.isFinite(price)) return null;

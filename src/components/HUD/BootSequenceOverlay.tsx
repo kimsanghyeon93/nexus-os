@@ -61,6 +61,7 @@ export function BootSequenceOverlay({ onDismiss }: BootSequenceOverlayProps) {
         return;
       }
       const cur = BRIEFING_LINES[line];
+      if (cur === undefined) return;
       if (col >= cur.length) {
         // Move to next line after a longer pause for visual rhythm.
         line += 1;

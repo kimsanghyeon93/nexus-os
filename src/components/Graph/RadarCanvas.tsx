@@ -65,7 +65,7 @@ interface SimState {
 export interface RadarCanvasProps {
   entities: NexusEntity[];
   transactions: NexusEdge[];
-  clusters?: ClusterDef[];
+  clusters?: ClusterDef[] | undefined;
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   glowIntensity?: number;
@@ -108,7 +108,9 @@ export function RadarCanvas({
   // Resize
   useEffect(() => {
     if (!wrapRef.current) return;
-    const ro = new ResizeObserver(([e]) => {
+    const ro = new ResizeObserver(entries => {
+      const e = entries[0];
+      if (!e) return;
       const r = e.contentRect;
       setSize({ w: Math.max(100, r.width), h: Math.max(100, r.height) });
     });
@@ -198,7 +200,9 @@ export function RadarCanvas({
       (adj[tx.from] ||= new Set()).add(tx.to);
       (adj[tx.to]   ||= new Set()).add(tx.from);
     });
-    const center = sim.nodes[sim.idx[selectedId]];
+    const centerIdx = sim.idx[selectedId];
+    if (centerIdx === undefined) return;
+    const center = sim.nodes[centerIdx];
     if (!center) return;
     const visited = new Set<string>([selectedId]);
     let frontier: string[] = [selectedId];
@@ -221,6 +225,7 @@ export function RadarCanvas({
           const oi = sim.idx[nb];
           if (oi == null) continue;
           const o = sim.nodes[oi];
+          if (!o) continue;
           const dx = o.x - center.x, dy = o.y - center.y;
           const len = Math.hypot(dx, dy) || 1;
           o.vx += (dx / len) * basePush;
@@ -321,9 +326,11 @@ export function RadarCanvas({
       // Edge springs (inter-cluster only)
       for (let i = 0; i < visibleTx.length; i++) {
         const tx = visibleTx[i];
+        if (!tx) continue;
         const ai = sim.idx[tx.from], bi = sim.idx[tx.to];
         if (ai == null || bi == null) continue;
         const a = sim.nodes[ai], b = sim.nodes[bi];
+        if (!a || !b) continue;
         if (tx.kind === 'cluster') continue;
         const dx = b.x - a.x, dy = b.y - a.y;
         const len = Math.hypot(dx, dy) || 1;
@@ -344,9 +351,11 @@ export function RadarCanvas({
       });
       for (const c in byCluster) {
         const arr = byCluster[c];
+        if (!arr) continue;
         for (let i = 0; i < arr.length; i++) {
           for (let j = i + 1; j < arr.length; j++) {
             const a = arr[i], b = arr[j];
+            if (!a || !b) continue;
             const dx = b.x - a.x, dy = b.y - a.y;
             const d2 = dx * dx + dy * dy + 25;
             if (d2 > 4900) continue;
@@ -376,6 +385,7 @@ export function RadarCanvas({
       ctx.lineWidth = 1;
       for (let i = 0; i < visibleTx.length; i++) {
         const tx = visibleTx[i];
+        if (!tx) continue;
         const a = byId[tx.from], b = byId[tx.to];
         if (!a || !b) continue;
         const isAnomaly = tx.anomaly > 0.7;
@@ -432,6 +442,7 @@ export function RadarCanvas({
         ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < visibleTx.length; i++) {
           const tx = visibleTx[i];
+          if (!tx) continue;
           const a = byId[tx.from], b = byId[tx.to];
           if (!a || !b) continue;
           if (tx.kind === 'cluster' && i % 2 === 0) continue;
@@ -654,7 +665,7 @@ export function RadarCanvas({
   );
 }
 
-function ClusterLegend({ clusters }: { clusters?: ClusterDef[] }) {
+function ClusterLegend({ clusters }: { clusters?: ClusterDef[] | undefined }) {
   if (!clusters) return null;
   const colorOf = (c: string): string =>
     c === 'lime' ? COLOR.lime : c === 'amber' ? COLOR.amber : c === 'purple' ? COLOR.purple : COLOR.cyan;
