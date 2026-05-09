@@ -41,6 +41,12 @@ interface TopBarProps {
   sso: SsoSession;
   connectionState?: ConnectionState;
   operator?: string;
+  /** Human-readable source label rendered as a small badge next to the
+   *  connection pill (e.g. 'BACKEND · LIVE', 'SYNTHETIC'). Omit to hide. */
+  sourceLabel?: string;
+  /** Origin classification. 'remote' renders cyan (data from nexus-backend),
+   *  'local' renders grey (synthetic / mock / offline adapter). */
+  sourceKind?: 'remote' | 'local';
 }
 
 /* ------------------------------------------------------------------ */
@@ -83,8 +89,35 @@ function StatusPill({ state }: StatusPillProps) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Source Pill — origin badge (BACKEND · LIVE vs SYNTHETIC etc.)      */
+/* ------------------------------------------------------------------ */
+
+interface SourcePillProps {
+  label: string;
+  kind: 'remote' | 'local';
+}
+
+function SourcePill({ label, kind }: SourcePillProps) {
+  // 'remote' = network-fed data from nexus-backend → cyan (matches LIVE pill).
+  // 'local'  = synthetic / mock / offline adapter → low/grey (no glow).
+  const tone = kind === 'remote' ? 'cyan' : 'low';
+  return (
+    <div
+      className={`nx-source-pill nx-source-pill--${tone}`}
+      title={`Data source: ${label}${kind === 'remote' ? ' (nexus-backend WebSocket)' : ' (in-process)'}`}
+      aria-label={`Data source: ${label}`}
+    >
+      <span className="nx-source-pill__prefix">SRC</span>
+      <span className="nx-source-pill__txt">{label}</span>
+    </div>
+  );
+}
+
+
 export function TopBar({
   telemetry, sso, connectionState = 'connected', operator = 'OP · J.VANCE',
+  sourceLabel, sourceKind,
 }: TopBarProps) {
   const [t, setT] = useState(0);
   useEffect(() => {
@@ -118,6 +151,9 @@ export function TopBar({
       <div className="nx-top__status">
         {/* Live API connection panel */}
         <StatusPill state={connectionState} />
+        {sourceLabel && (
+          <SourcePill label={sourceLabel} kind={sourceKind ?? 'local'} />
+        )}
         <div className="nx-api">
           <div className="nx-api__head">
             <span className="nx-dot nx-dot--cyan nx-dot--pulse"></span>

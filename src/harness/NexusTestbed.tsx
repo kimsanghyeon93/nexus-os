@@ -6,6 +6,10 @@
 //   • MOMENTUM/MOCK  — MomentumStreamer in 'mock' mode (Momentum US universe,
 //                      no network) — drives the existing NEXUS sector entities
 //   • MOMENTUM/LIVE  — MomentumStreamer hitting the Alpha Vantage proxy
+//   • HANTOO/STUB    — KIS OpenAPI scaffold, no network
+//   • BACKEND/LIVE   — connects to ws://localhost:8000/v1/stream; the
+//                      nexus-backend mock publisher (or KIS adapter once
+//                      4c lands) drives the canvas
 //
 // Switching source rebuilds the streamer; subscriptions inside <App /> rewire
 // automatically because useMarketData re-runs its effect on streamer change.
@@ -15,6 +19,7 @@ import App from '../App';
 import { MockStreamer } from './MockStreamer';
 import { MomentumStreamer } from '../adapters/MomentumStreamer';
 import { HanTooStreamer } from '../adapters/HanTooStreamer';
+import { BackendStreamer } from '../services/BackendStreamer';
 import { loadSourcePref, saveSourcePref } from '../utils/persistence';
 import type { IMarketStreamer } from '../types/streamer';
 
@@ -27,7 +32,7 @@ const DEFAULT_SHOCK_TARGET = 'KRX_SEMI';
  *  new source requires updating this single tuple — TS keeps everything else
  *  in lockstep, and `loadSourcePref` will reject any stale localStorage value
  *  that's not in the current allowlist. */
-const SOURCES = ['synthetic', 'momentum-mock', 'momentum-live', 'hantoo-stub'] as const;
+const SOURCES = ['synthetic', 'momentum-mock', 'momentum-live', 'hantoo-stub', 'backend-live'] as const;
 type Source = typeof SOURCES[number];
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -35,6 +40,7 @@ const SOURCE_LABEL: Record<Source, string> = {
   'momentum-mock':  'MOMENTUM · MOCK',
   'momentum-live':  'MOMENTUM · LIVE',
   'hantoo-stub':    'HANTOO · STUB',
+  'backend-live':   'BACKEND · LIVE',
 };
 
 function makeStreamer(source: Source): IMarketStreamer {
@@ -43,6 +49,7 @@ function makeStreamer(source: Source): IMarketStreamer {
     case 'momentum-mock': return new MomentumStreamer({ source: 'mock' });
     case 'momentum-live': return new MomentumStreamer({ source: 'live' });
     case 'hantoo-stub':   return new HanTooStreamer({ stubMode: true });
+    case 'backend-live':  return new BackendStreamer();
   }
 }
 
@@ -88,6 +95,8 @@ export function NexusTestbed() {
       streamer={streamer}
       selectedId={selectedId}
       onSelectedChange={setSelectedId}
+      sourceLabel={SOURCE_LABEL[source]}
+      sourceKind={source === 'backend-live' ? 'remote' : 'local'}
       harnessSlot={
         <HarnessPanel
           source={source}
@@ -144,11 +153,12 @@ function HarnessPanel({
         <div style={{ color: fpsColor }}>{fps} FPS</div>
       </div>
 
-      {/* Source selector */}
+      {/* Source selector — driven by SOURCES so adding a new option in the
+          tuple at the top of the file flows through here automatically. */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ color: '#8A93A8', marginBottom: 4 }}>SOURCE</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['synthetic', 'momentum-mock', 'momentum-live', 'hantoo-stub'] as const).map(s => {
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {SOURCES.map(s => {
             const active = s === source;
             return (
               <button
@@ -157,7 +167,8 @@ function HarnessPanel({
                 data-testid={`source-${s}`}
                 onClick={() => onSourceChange(s)}
                 style={{
-                  flex: 1,
+                  flex: '1 1 calc(33% - 4px)',
+                  minWidth: 0,
                   padding: '5px 4px',
                   background: active ? 'rgba(0, 191, 255, 0.12)' : 'transparent',
                   color: active ? '#00BFFF' : '#8A93A8',
@@ -230,7 +241,9 @@ function HarnessPanel({
           lineHeight: 1.5,
         }}
       >
-        {source === 'hantoo-stub'
+        {source === 'backend-live'
+          ? 'WS → ws://localhost:8000/v1/stream · nexus-backend mock publisher feeds 12 KRX symbols.'
+          : source === 'hantoo-stub'
           ? 'KIS OpenAPI scaffold. No network. KRX entities ticking.'
           : source === 'momentum-live'
           ? 'Live polls Alpha Vantage proxy (~30s/batch). 28 tickers.'

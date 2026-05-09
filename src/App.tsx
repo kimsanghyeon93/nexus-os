@@ -41,10 +41,19 @@ export interface AppProps {
    *  target the currently selected entity. */
   selectedId?: string | null;
   onSelectedChange?: (id: string | null) => void;
+  /** Human-readable source label for the TopBar source badge
+   *  (e.g. 'BACKEND · LIVE'). Omit to hide the badge entirely. */
+  sourceLabel?: string;
+  /** Source origin classification — drives the badge color tone:
+   *    'remote' = data is coming over the network from nexus-backend → cyan
+   *    'local'  = synthetic / replay / offline adapter           → low (grey) */
+  sourceKind?: 'remote' | 'local';
 }
 
 export default function App({
-  streamer, harnessSlot, selectedId: controlledSelectedId, onSelectedChange,
+  streamer, harnessSlot,
+  selectedId: controlledSelectedId, onSelectedChange,
+  sourceLabel, sourceKind,
 }: AppProps = {}) {
   const {
     dataset, telemetry, sso, shockTarget, connectionState,
@@ -310,7 +319,13 @@ export default function App({
 
   return (
     <div className="nx-app" data-screen-label="Dashboard">
-      <TopBar telemetry={telemetry} sso={sso} connectionState={connectionState} />
+      <TopBar
+        telemetry={telemetry}
+        sso={sso}
+        connectionState={connectionState}
+        sourceLabel={sourceLabel}
+        sourceKind={sourceKind}
+      />
       <div
         className={
           'nx-app__main' +
