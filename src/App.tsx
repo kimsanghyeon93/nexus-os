@@ -12,7 +12,7 @@ import { PropertyHUD } from './components/HUD/PropertyHUD';
 import { CaptureHistory } from './components/HUD/CaptureHistory';
 import { DiffSummaryCard } from './components/HUD/DiffSummaryCard';
 import { BootSequenceOverlay } from './components/HUD/BootSequenceOverlay';
-import { RadarCanvas } from './components/Graph/RadarCanvas';
+import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
 import { summarizeDiff, type DiffFilter } from './utils/diff';
 import { loadLayoutPref, saveLayoutPref, loadTourSeen, saveTourSeen } from './utils/persistence';
@@ -140,6 +140,31 @@ export default function App({
   const [pulseId, setPulseId] = useState<string | null>(null);
   const jsonCacheRef = useRef<Map<string, string>>(new Map());
 
+  // Sprint 5o-B command wiring:
+  //   ⌘A Analyze cluster — drive RadarCanvas via imperative handle (zoom)
+  //   ⌘R Replay last shock — re-fire triggerAnomaly on the most recent target
+  //   ⌘! Raise alert       — fire triggerAnomaly on the current selection
+  // The radar ref captures the imperative handle exposed by RadarCanvas;
+  // lastShockIdRef remembers the most recent shock target across renders
+  // (a ref, not state, because re-render isn't useful — only the click is).
+  const radarRef    = useRef<RadarCanvasHandle | null>(null);
+  const lastShockIdRef = useRef<string | null>(null);
+  // Track shock targets coming through the streamer (anomaly events fire
+  // shockTarget; clicking "Raise alert" fires triggerAnomaly which loops
+  // back through the streamer → setShockTarget → here).
+  useEffect(() => {
+    if (shockTarget) lastShockIdRef.current = shockTarget.id;
+  }, [shockTarget]);
+
+  // Tiny toast for "future sprint" stubs (⌘I, ⌘T, ⌘L) so the operator
+  // gets feedback instead of a silent no-op. Auto-clears after 2.4s.
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const handleCommand = useCallback((id: string) => {
     if (id === 'snapshot') {
       const { json, meta } = prepareSnapshot(dataset);
@@ -170,8 +195,65 @@ export default function App({
       toggleBootTour();
       return;
     }
-    // other command ids are reserved for future wiring
-  }, [dataset, toggleBootTour]);
+
+    // ── Sprint 5o-B: live commands ──────────────────────────────────
+    // All four below require a current selection to act on.  We read
+    // selection inline (avoiding a `selected` dep that would re-create
+    // handleCommand on every selection flip and tear down the keydown
+    // effect's cleanup unnecessarily).
+    const currentSelected = isControlled ? controlledSelectedId : internalSelectedId;
+    const selectedEntity  = currentSelected
+      ? dataset.ENTITIES.find(e => e.id === currentSelected) ?? null
+      : null;
+
+    if (id === 'analyze') {
+      if (!selectedEntity) {
+        setToast('Select an entity first (⌘A then click)');
+        return;
+      }
+      radarRef.current?.analyzeCluster(selectedEntity.cluster);
+      console.info(`[NEXUS] analyze cluster · ${selectedEntity.cluster}`);
+      return;
+    }
+    if (id === 'alert') {
+      if (!selectedEntity) {
+        setToast('Select an entity first to raise alert');
+        return;
+      }
+      // Fires the 4-hop cascading ripple. Streamer's onAnomaly callback
+      // promotes it back through useMarketData → setShockTarget → our
+      // useEffect logs it as the lastShockId for ⌘R replay.
+      streamer?.triggerAnomaly(selectedEntity.id);
+      console.warn(`[NEXUS] alert raised · ${selectedEntity.id}`);
+      return;
+    }
+    if (id === 'replay') {
+      const last = lastShockIdRef.current;
+      if (!last) {
+        setToast('No shock to replay yet — raise an alert first');
+        return;
+      }
+      streamer?.triggerAnomaly(last);
+      console.info(`[NEXUS] replay last shock · ${last}`);
+      return;
+    }
+
+    // ── Stubs for Sprint 5o-C / 5p ─────────────────────────────────
+    // Logged + toasted so the operator knows the binding works and the
+    // feature is on the roadmap — silent no-ops are worse UX than honest
+    // "coming soon" feedback.
+    if (id === 'isolate' || id === 'trace' || id === 'audit') {
+      const labels: Record<string, string> = {
+        isolate: 'Isolate entity',
+        trace:   'Trace flow path',
+        audit:   'Audit transactions',
+      };
+      const label = labels[id];
+      console.info(`[NEXUS] ${label} (id=${id}) — wiring lands in Sprint 5o-C`);
+      setToast(`${label}: coming in Sprint 5o-C`);
+      return;
+    }
+  }, [dataset, toggleBootTour, isControlled, controlledSelectedId, internalSelectedId, streamer]);
 
   // Clear the new-entry pulse 700ms after it fires so subsequent captures
   // can re-pulse the topmost row even if it has the same id (rare).
@@ -220,6 +302,34 @@ export default function App({
         handleCommand('snapshot');
         return;
       }
+      // Sprint 5o-B command hotkeys. ⌘! (alert) is awkward on most layouts
+      // because Shift+1 = "!"; we accept both `e.key === '!'` (the shifted
+      // glyph) and the Digit1 code with shiftKey set.
+      if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        handleCommand('analyze');
+        return;
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleCommand('replay');
+        return;
+      }
+      if (e.key === 'i' || e.key === 'I') {
+        e.preventDefault();
+        handleCommand('isolate');
+        return;
+      }
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        handleCommand('trace');
+        return;
+      }
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        handleCommand('audit');
+        return;
+      }
       // KeyboardEvent.code is more reliable than .key for punctuation.
       if (e.key === '\\' || e.code === 'Backslash') {
         e.preventDefault();
@@ -227,8 +337,21 @@ export default function App({
         return;
       }
     };
+    // ⌘! Raise alert — separate handler because we need shiftKey set
+    // (Shift+1 produces "!" on US/KR layouts).
+    const onAlertKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key === '!' || (e.shiftKey && e.code === 'Digit1')) {
+        e.preventDefault();
+        handleCommand('alert');
+      }
+    };
+    window.addEventListener('keydown', onAlertKey);
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', onAlertKey);
+    };
   }, [handleCommand, toggleDeepFocus, toggleBootTour]);
 
   // Global drag-and-drop replay. The whole window is the drop target so the
@@ -354,6 +477,7 @@ export default function App({
         </div>
 
         <RadarCanvas
+          ref={radarRef}
           entities={ENTITIES}
           transactions={TX}
           clusters={CLUSTERS}
@@ -422,6 +546,35 @@ export default function App({
         />
       )}
       {showBootTour && <BootSequenceOverlay onDismiss={dismissBootTour} />}
+
+      {/* Sprint 5o-B command-feedback toast. Auto-clears 2.4s after the
+       * command fires; floats above the canvas without occluding the HUD. */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: '64px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '8px 16px',
+            background: 'rgba(11, 11, 24, 0.92)',
+            border: '0.8px solid var(--cyan, #00BFFF)',
+            borderRadius: '3px',
+            color: 'var(--cyan, #00BFFF)',
+            fontFamily: 'var(--font-mono, monospace)',
+            fontSize: '11px',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            zIndex: 1300,
+            boxShadow: '0 0 12px rgba(0, 191, 255, 0.25)',
+            pointerEvents: 'none',
+          }}
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

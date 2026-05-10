@@ -5,7 +5,10 @@
 // • Curved/straight edges, particle flow, anomaly halos
 // • Hover/click hit-test against current sim positions
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
+} from 'react';
 import type {
   CentralityMode,
   ClusterDef,
@@ -14,6 +17,21 @@ import type {
   NexusEntity,
 } from '../../types/nexus';
 import type { DiffFilter, EntityDelta } from '../../utils/diff';
+import { screenToWorld, useViewport } from './useViewport';
+
+/** Imperative handle exposed via React.forwardRef so the parent can drive
+ * commands like Analyze Cluster (zoom + pan to a cluster) without lifting
+ * the entire viewport state up. */
+export interface RadarCanvasHandle {
+  /** Sprint 5o-B Command "Analyze cluster" (⌘A). Smoothly zooms the
+   * viewport to scale=3 and pans so the cluster center sits at canvas
+   * midpoint. Unknown clusterId is a no-op (logged). */
+  analyzeCluster: (clusterId: string) => void;
+  /** Reset the viewport to identity (instant, no tween). Useful when
+   * the operator wants to bail back to fit-all without waiting for the
+   * dblclick easing. */
+  resetView: () => void;
+}
 
 const COLOR = {
   cyan:   '#00BFFF',
@@ -83,7 +101,7 @@ export interface RadarCanvasProps {
   diffFilter?: DiffFilter;
 }
 
-export function RadarCanvas({
+function RadarCanvasInner({
   entities, transactions, clusters,
   selectedId, onSelect,
   glowIntensity = 1, dataDensity = 1,
@@ -92,7 +110,7 @@ export function RadarCanvas({
   diffEdgeMap = null,
   diffMap     = null,
   diffFilter  = null,
-}: RadarCanvasProps) {
+}: RadarCanvasProps, ref: React.Ref<RadarCanvasHandle>) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dprRef = useRef<number>(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
@@ -102,6 +120,35 @@ export function RadarCanvas({
   const tRef = useRef(0);
   const sweepRef = useRef(0);
   const simRef = useRef<SimState | null>(null);
+
+  // Sprint 5o-A: pan + zoom viewport. Hook owns the math + handlers;
+  // we wire its events into the <canvas> below and consult its ref
+  // every frame inside the rAF draw loop.
+  const vp = useViewport();
+
+  // Sprint 5o-B: Analyze Cluster (⌘A) — Compute the viewport target
+  // such that the cluster center lands at the canvas midpoint at
+  // zoom 3x, then tween. Cluster centers `cx, cy` are 0..1 normalized
+  // against the canvas pixel size, so multiply by current size.w/size.h.
+  useImperativeHandle(ref, () => ({
+    analyzeCluster: (clusterId: string) => {
+      const c = (clusters ?? []).find(cc => cc.id === clusterId);
+      if (!c) {
+        // eslint-disable-next-line no-console
+        console.info(`[NEXUS] analyzeCluster: unknown cluster '${clusterId}'`);
+        return;
+      }
+      const SCALE = 3;
+      const worldX = c.cx * size.w;
+      const worldY = c.cy * size.h;
+      vp.tweenTo({
+        scale: SCALE,
+        tx:    size.w / 2 - worldX * SCALE,
+        ty:    size.h / 2 - worldY * SCALE,
+      });
+    },
+    resetView: () => vp.reset(),
+  }), [clusters, size.w, size.h, vp]);
 
   const curved = edgeMode === 'curved';
 
@@ -246,26 +293,47 @@ export function RadarCanvas({
     return 6;
   }, [centralityMode]);
 
-  const hitTest = useCallback((mx: number, my: number): string | null => {
+  const hitTest = useCallback((screenX: number, screenY: number): string | null => {
     const sim = simRef.current;
     if (!sim) return null;
+    // Click arrives in screen coords; sim positions are world coords
+    // (the canvas was originally drawing them at scale=1, identity tx/ty,
+    // so "world" is the same coordinate system as "screen at identity"
+    // — but at non-identity viewport, we must invert).
+    const w = screenToWorld(vp.viewportRef.current, screenX, screenY);
+    // Hit radius in world units = visual hit radius / scale, so the
+    // hit target stays the same physical pixel size at all zoom levels.
+    const scale = vp.viewportRef.current.scale;
+    const HIT_PAD_PX = 6;
     let best: SimNode | null = null;
     let bestD2 = Infinity;
     for (const n of sim.nodes) {
-      const dx = mx - n.x, dy = my - n.y;
+      const dx = w.x - n.x, dy = w.y - n.y;
       const d2 = dx * dx + dy * dy;
-      const r = radiusOf(n.ref) + 6;
+      const r = radiusOf(n.ref) + HIT_PAD_PX / scale;
       if (d2 < r * r && d2 < bestD2) { best = n; bestD2 = d2; }
     }
     return best?.id || null;
-  }, [radiusOf]);
+  }, [radiusOf, vp.viewportRef]);
 
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Suppress hover updates mid-drag — the cursor isn't pointing at
+    // entities, it's panning the surface.
+    if (vp.isPanning) {
+      if (hoverId) setHoverId(null);
+      return;
+    }
     const rect = canvasRef.current!.getBoundingClientRect();
     const id = hitTest(e.clientX - rect.left, e.clientY - rect.top);
     if (id !== hoverId) setHoverId(id);
   };
   const onClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // A drag-then-release fires both pointerup and click. We want
+    // selection only on a true click (no panning happened); the panning
+    // flag flips false in pointerup, so by the time click fires the
+    // ref is already cleared — but we read viewportRef.current.tx/ty
+    // delta via React state instead to be safe.
+    if (vp.isPanning) return;
     const rect = canvasRef.current!.getBoundingClientRect();
     const id = hitTest(e.clientX - rect.left, e.clientY - rect.top);
     if (id) onSelect?.(id);
@@ -298,8 +366,16 @@ export function RadarCanvas({
       }
       ctx.clearRect(0, 0, W, H);
 
+      // Viewport transform — pan + zoom apply to all subsequent drawing.
+      // Save/restore around the entire render so the next frame starts
+      // from a clean DPR-only baseline (set once at canvas-resize time).
+      const view = vp.viewportRef.current;
+      ctx.save();
+      ctx.translate(view.tx, view.ty);
+      ctx.scale(view.scale, view.scale);
+
       const sim = simRef.current;
-      if (!sim) { raf = requestAnimationFrame(draw); return; }
+      if (!sim) { ctx.restore(); raf = requestAnimationFrame(draw); return; }
 
       if (!sim.initialized && W > 100) {
         sim.nodes.forEach(n => { n.x = n.bx * W; n.y = n.by * H; });
@@ -613,11 +689,13 @@ export function RadarCanvas({
       }
       ctx.globalAlpha = 1;
 
+      ctx.restore();   // pop viewport transform → DPR-only baseline
+
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, diffEdgeMap]);
+  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, diffEdgeMap, vp.viewportRef]);
 
   const anomalyEdgeCount = useMemo(
     () => visibleTx.filter(t => t.anomaly > 0.7).length, [visibleTx],
@@ -635,7 +713,20 @@ export function RadarCanvas({
         onMouseMove={onMouseMove}
         onMouseLeave={() => setHoverId(null)}
         onClick={onClick}
-        style={{ cursor: hoverId ? 'pointer' : 'crosshair' }}
+        onWheel={vp.onWheel}
+        onPointerDown={vp.onPointerDown}
+        onPointerMove={vp.onPointerMove}
+        onPointerUp={vp.onPointerUp}
+        onPointerCancel={vp.onPointerUp}
+        onDoubleClick={vp.onDoubleClick}
+        style={{
+          // Drag-pan grabbing wins over hover-pointer; grab hint when
+          // idle is too aggressive (most clicks are entity selects),
+          // so default to crosshair when not actively panning.
+          cursor: vp.isPanning ? 'grabbing'
+                : hoverId      ? 'pointer'
+                :                'crosshair',
+        }}
       />
 
       <div className="nx-canvas__hud-tl">
@@ -649,6 +740,19 @@ export function RadarCanvas({
         <div className="nx-mono-dim" style={{ fontSize: 10, marginTop: 4, textAlign: 'right', color: '#DEFF9A' }}>
           ◆ {anomalyEdgeCount} ANOMALY EDGES
         </div>
+        {/* Zoom indicator (Sprint 5o-A) — only renders when off-identity */}
+        {(vp.viewport.scale !== 1 || vp.viewport.tx !== 0 || vp.viewport.ty !== 0) && (
+          <div
+            className="nx-mono-dim"
+            style={{
+              fontSize: 10, marginTop: 4, textAlign: 'right',
+              color: 'var(--cyan, #00BFFF)',
+            }}
+            title="Double-click empty area to reset"
+          >
+            × {vp.viewport.scale.toFixed(2)}
+          </div>
+        )}
       </div>
       <div className="nx-canvas__hud-bl">
         <ClusterLegend clusters={clusters} />
@@ -664,6 +768,13 @@ export function RadarCanvas({
     </div>
   );
 }
+
+// forwardRef wrapper — exposes RadarCanvasHandle to App.tsx so command-
+// center actions (Analyze cluster, Reset view) can drive the canvas
+// imperatively without lifting the entire viewport state up.
+export const RadarCanvas = forwardRef<RadarCanvasHandle, RadarCanvasProps>(RadarCanvasInner);
+RadarCanvas.displayName = 'RadarCanvas';
+
 
 function ClusterLegend({ clusters }: { clusters?: ClusterDef[] | undefined }) {
   if (!clusters) return null;

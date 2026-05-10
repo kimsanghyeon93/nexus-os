@@ -8,7 +8,8 @@ export type ClusterId =
 export type ClusterColor = 'cyan' | 'lime' | 'amber' | 'purple';
 
 export type EntityType =
-  | 'hub' | 'central_bank' | 'bond' | 'equity_sector' | 'us_equity' | 'fx'
+  | 'hub' | 'central_bank' | 'bond' | 'equity_sector'
+  | 'us_equity' | 'kr_equity' | 'fx'
   | 'commodity' | 'crypto' | 'wallet' | 'mixer' | 'exchange'
   | 'macro' | 'corporation' | 'holding' | 'bank';
 

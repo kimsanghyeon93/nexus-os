@@ -242,21 +242,21 @@ function buildDataset(): NexusDataset {
   // so frontend-only render and DB snapshot agree at boot.
   placeMembers(CLUSTERS[8]!, [
     // TECH (semi + internet)
-    { id: '005930', label: 'Samsung Electronics', type: 'equity', jurisdiction: 'KR', anomaly: 0.12, sanctioned: false, txVol: 8400 },
-    { id: '000660', label: 'SK Hynix',            type: 'equity', jurisdiction: 'KR', anomaly: 0.18, sanctioned: false, txVol: 3220 },
-    { id: '035420', label: 'NAVER',               type: 'equity', jurisdiction: 'KR', anomaly: 0.71, sanctioned: false, txVol: 1180 },
-    { id: '035720', label: 'Kakao',               type: 'equity', jurisdiction: 'KR', anomaly: 0.22, sanctioned: false, txVol:  842 },
+    { id: '005930', label: 'Samsung Electronics', type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.12, sanctioned: false, txVol: 8400 },
+    { id: '000660', label: 'SK Hynix',            type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.18, sanctioned: false, txVol: 3220 },
+    { id: '035420', label: 'NAVER',               type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.71, sanctioned: false, txVol: 1180 },
+    { id: '035720', label: 'Kakao',               type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.22, sanctioned: false, txVol:  842 },
     // FINANCE
-    { id: '105560', label: 'KB Financial',        type: 'equity', jurisdiction: 'KR', anomaly: 0.08, sanctioned: false, txVol: 1540 },
-    { id: '055550', label: 'Shinhan Financial',   type: 'equity', jurisdiction: 'KR', anomaly: 0.11, sanctioned: false, txVol: 1310 },
-    { id: '086790', label: 'Hana Financial',      type: 'equity', jurisdiction: 'KR', anomaly: 0.09, sanctioned: false, txVol:  990 },
+    { id: '105560', label: 'KB Financial',        type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.08, sanctioned: false, txVol: 1540 },
+    { id: '055550', label: 'Shinhan Financial',   type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.11, sanctioned: false, txVol: 1310 },
+    { id: '086790', label: 'Hana Financial',      type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.09, sanctioned: false, txVol:  990 },
     // MANUFACTURING (auto + steel + chemical)
-    { id: '005380', label: 'Hyundai Motor',       type: 'equity', jurisdiction: 'KR', anomaly: 0.27, sanctioned: false, txVol: 1910 },
-    { id: '005490', label: 'POSCO Holdings',      type: 'equity', jurisdiction: 'KR', anomaly: 0.31, sanctioned: false, txVol: 1240 },
-    { id: '051910', label: 'LG Chem',             type: 'equity', jurisdiction: 'KR', anomaly: 0.68, sanctioned: false, txVol: 2080 },
+    { id: '005380', label: 'Hyundai Motor',       type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.27, sanctioned: false, txVol: 1910 },
+    { id: '005490', label: 'POSCO Holdings',      type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.31, sanctioned: false, txVol: 1240 },
+    { id: '051910', label: 'LG Chem',             type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.68, sanctioned: false, txVol: 2080 },
     // BIO
-    { id: '207940', label: 'Samsung Biologics',   type: 'equity', jurisdiction: 'KR', anomaly: 0.14, sanctioned: false, txVol:  720 },
-    { id: '068270', label: 'Celltrion',           type: 'equity', jurisdiction: 'KR', anomaly: 0.19, sanctioned: false, txVol:  620 },
+    { id: '207940', label: 'Samsung Biologics',   type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.14, sanctioned: false, txVol:  720 },
+    { id: '068270', label: 'Celltrion',           type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.19, sanctioned: false, txVol:  620 },
   ], 91);
 
   // Wire each individual ticker to its sector aggregate so the canvas
