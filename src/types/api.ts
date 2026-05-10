@@ -83,6 +83,49 @@ export interface ReadinessDTO {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+//  /v1/audit/recent — Sprint 5o-C-3
+// ──────────────────────────────────────────────────────────────────────
+
+/** One agent's contribution to a coordinator decision. The backend
+ *  preserves additional fields (e.g. agent-specific notes) but the modal
+ *  only renders agent_id + action + confidence today. */
+export interface AuditRationale {
+  agent_id:   string;
+  action:     string;          // 'buy' | 'hold' | 'sell'
+  confidence: number;          // 0..1
+  /** Forward-compatible bag for agent-specific extras. */
+  [extra: string]: unknown;
+}
+
+/** One row from `execution_audit`. Time-series per symbol; the modal
+ *  renders these newest-first. Mode + executed disambiguate the four
+ *  decision shapes:
+ *    live + executed=true  → broker filled
+ *    live + executed=false → broker rejected (`reason` carries detail)
+ *    shadow                → would-be order, gated by ALLOW_LIVE_ORDERS
+ *    noop                  → either HOLD signal OR sizer dropped to 0 */
+export interface AuditRow {
+  ts:                string;          // ISO 8601 UTC
+  symbol:            string;
+  mode:              'live' | 'shadow' | 'noop';
+  executed:          boolean;
+  intended_action:   'buy' | 'hold' | 'sell';
+  intended_quantity: number;
+  order_id:          string | null;
+  blocked_by:        string | null;   // guard_id when blocked
+  reason:            string | null;
+  signal_action:     'buy' | 'hold' | 'sell';
+  signal_confidence: number;
+  signal_score:      number;
+  signal_rationale:  AuditRationale[];
+}
+
+export interface AuditRecentDTO {
+  symbol: string;
+  rows:   AuditRow[];
+}
+
+// ──────────────────────────────────────────────────────────────────────
 //  ApiResult — discriminated union the wrapper returns
 // ──────────────────────────────────────────────────────────────────────
 

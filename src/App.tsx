@@ -12,6 +12,7 @@ import { PropertyHUD } from './components/HUD/PropertyHUD';
 import { CaptureHistory } from './components/HUD/CaptureHistory';
 import { DiffSummaryCard } from './components/HUD/DiffSummaryCard';
 import { BootSequenceOverlay } from './components/HUD/BootSequenceOverlay';
+import { AuditModal } from './components/HUD/AuditModal';
 import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
 import { summarizeDiff, type DiffFilter } from './utils/diff';
@@ -171,8 +172,15 @@ export default function App({
   // see "X's neighborhood" + "Y's downstream cone" without losing either.
   const [tracedId, setTracedId] = useState<string | null>(null);
 
-  // Tiny toast for command feedback (⌘I/⌘T lock/unlock, ⌘R no-shock,
-  // ⌘L stub). Auto-clears after 2.4s.
+  // Sprint 5o-C-3: ⌘L Audit modal target. When set, AuditModal mounts
+  // and fetches /v1/audit/recent for the symbol. We store both id and
+  // label so the modal title can show the human-readable name even
+  // after the operator selects something else underneath.
+  const [auditTarget, setAuditTarget] =
+    useState<{ id: string; label: string } | null>(null);
+
+  // Tiny toast for command feedback (⌘I/⌘T lock/unlock, ⌘R no-shock).
+  // Auto-clears after 2.4s.
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => {
     if (!toast) return;
@@ -299,16 +307,25 @@ export default function App({
       return;
     }
 
-    // ── Remaining stub for Sprint 5o-C-3 ───────────────────────────
-    // Logged + toasted so the operator knows the binding works and the
-    // feature is on the roadmap — silent no-ops are worse UX than honest
-    // "coming soon" feedback.
+    // ⌘L Audit transactions (Sprint 5o-C-3): open the AuditModal for the
+    // current selection. The modal owns its own fetch + loading / empty
+    // / error states; we just point it at a symbol. Re-pressing ⌘L while
+    // already open and pointing at the SAME entity closes the modal —
+    // mirrors ⌘I / ⌘T's "press again to clear" muscle memory.
     if (id === 'audit') {
-      console.info('[NEXUS] Audit transactions (id=audit) — wiring lands in Sprint 5o-C-3');
-      setToast('Audit transactions: coming in Sprint 5o-C-3');
+      if (!selectedEntity) {
+        setToast('Select an entity first to audit');
+        return;
+      }
+      if (auditTarget?.id === selectedEntity.id) {
+        setAuditTarget(null);
+        return;
+      }
+      setAuditTarget({ id: selectedEntity.id, label: selectedEntity.label });
+      console.info(`[NEXUS] audit · ${selectedEntity.id} (${selectedEntity.label})`);
       return;
     }
-  }, [dataset, toggleBootTour, isControlled, controlledSelectedId, internalSelectedId, streamer, isolatedId, tracedId]);
+  }, [dataset, toggleBootTour, isControlled, controlledSelectedId, internalSelectedId, streamer, isolatedId, tracedId, auditTarget]);
 
   // Clear the new-entry pulse 700ms after it fires so subsequent captures
   // can re-pulse the topmost row even if it has the same id (rare).
@@ -603,6 +620,18 @@ export default function App({
         />
       )}
       {showBootTour && <BootSequenceOverlay onDismiss={dismissBootTour} />}
+
+      {/* Sprint 5o-C-3 Audit modal. Mounts when auditTarget is set; the
+       *  modal owns its own fetch + loading/empty/error/data branches.
+       *  Closing routes through onClose → null state → unmount, which
+       *  also cancels any in-flight fetch via the modal's effect cleanup. */}
+      {auditTarget && (
+        <AuditModal
+          symbol={auditTarget.id}
+          label={auditTarget.label}
+          onClose={() => setAuditTarget(null)}
+        />
+      )}
 
       {/* Sprint 5o-B command-feedback toast. Auto-clears 2.4s after the
        * command fires; floats above the canvas without occluding the HUD. */}
