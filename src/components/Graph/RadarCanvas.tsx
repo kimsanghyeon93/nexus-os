@@ -106,6 +106,16 @@ export interface RadarCanvasProps {
    * also outside the diff match shows at DIM_FACTOR² (~0.4%). Null
    * disables isolation entirely. */
   isolatedId?: string | null;
+  /** Sprint 5o-C-2: Trace flow path mode. When set, performs a forward
+   * BFS along directed edges (`from → to`) up to 4 hops from the focused
+   * entity and renders only the resulting downstream cone at full
+   * opacity; everything else dims by DIM_FACTOR. Independent of
+   * `isolatedId` — both can be active simultaneously and compose
+   * multiplicatively (DIM_FACTOR² ≈ 0.4%) for nodes/edges outside both
+   * sets. Distinct semantics from isolation: ⌘I shows "who connects to
+   * X" (1-hop undirected), ⌘T shows "where does flow from X reach"
+   * (multi-hop directed). Null disables tracing entirely. */
+  tracedId?: string | null;
 }
 
 function RadarCanvasInner({
@@ -118,6 +128,7 @@ function RadarCanvasInner({
   diffMap     = null,
   diffFilter  = null,
   isolatedId  = null,
+  tracedId    = null,
 }: RadarCanvasProps, ref: React.Ref<RadarCanvasHandle>) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -259,6 +270,42 @@ function RadarCanvasInner({
     }
     return out;
   }, [isolatedId, visibleTx]);
+
+  /* Sprint 5o-C-2: Trace forward-flow reachability from a focus entity.
+   * Forward BFS following only directed edges `from → to`. MAX_HOPS=4
+   * matches the existing cascading-wave depth so ⌘T's visual span
+   * mirrors the ripple operators already see on selection. Both sets
+   * computed in one pass — every traversed edge is added regardless of
+   * whether `to` was already visited, so parallel paths through the
+   * downstream cone stay visible (a→b and a→c→b both light up). Null
+   * when tracedId is null. Cap of 4 hops bounds the work to O(MAX_HOPS
+   * × edges); visibleTx tops out around 200 so this is trivial. */
+  const traceData = useMemo<{
+    nodes: ReadonlySet<string>;
+    edgeKeys: ReadonlySet<string>;
+  } | null>(() => {
+    if (!tracedId) return null;
+    const nodes = new Set<string>([tracedId]);
+    const edgeKeys = new Set<string>();
+    let frontier: string[] = [tracedId];
+    const MAX_HOPS = 4;
+    for (let hop = 0; hop < MAX_HOPS && frontier.length; hop++) {
+      const next: string[] = [];
+      for (const id of frontier) {
+        for (const tx of visibleTx) {
+          if (tx.from !== id) continue;
+          edgeKeys.add(`${tx.from}->${tx.to}`);
+          if (nodes.has(tx.to)) continue;
+          nodes.add(tx.to);
+          next.push(tx.to);
+        }
+      }
+      frontier = next;
+    }
+    return { nodes, edgeKeys };
+  }, [tracedId, visibleTx]);
+  const tracedNodes    = traceData?.nodes ?? null;
+  const tracedEdgeKeys = traceData?.edgeKeys ?? null;
 
   // Build sim state when entities change
   useEffect(() => {
@@ -497,17 +544,21 @@ function RadarCanvasInner({
       const byId: Record<string, SimNode> = {};
       sim.nodes.forEach(n => { byId[n.id] = n; });
 
-      /* Sprint 5o-C-1: Composed dim factors. Diff filter and isolation
-       * apply independently — multiplying makes both filters cooperate
-       * (an entity outside both gets DIM_FACTOR² ≈ 0.4%; outside one is
-       * the standard ~6%). Closures avoid 4× repetition across halo /
-       * body / label / edge render passes. */
+      /* Sprint 5o-C-1/2: Composed dim factors across diff filter,
+       * isolation, and trace. Each filter contributes one factor in [0..1];
+       * multiplied together so an entity/edge outside two filters dims
+       * to DIM_FACTOR² ≈ 0.4% (vs the standard ~6% for one). Closures
+       * avoid 4× repetition across halo / body / label / edge render
+       * passes. Each filter is null-respecting — null sentinel means
+       * "filter not active" and contributes a factor of 1. */
       const entityDim = (id: string): number => {
         const a = matchedEntities === null
           ? 1 : (matchedEntities.has(id) ? 1 : DIM_FACTOR);
         const b = isolatedNodes === null
           ? 1 : (isolatedNodes.has(id) ? 1 : DIM_FACTOR);
-        return a * b;
+        const c = tracedNodes === null
+          ? 1 : (tracedNodes.has(id) ? 1 : DIM_FACTOR);
+        return a * b * c;
       };
       const edgeDim = (key: string, fromId: string, toId: string): number => {
         const a = matchedEdgeKeys === null
@@ -522,7 +573,9 @@ function RadarCanvasInner({
           ? true : (isolatedNodes.has(fromId) && isolatedNodes.has(toId));
         const b = (isolatedEdgeKeys === null) || touchesFocus || bothInIso
           ? 1 : DIM_FACTOR;
-        return a * b;
+        const c = tracedEdgeKeys === null
+          ? 1 : (tracedEdgeKeys.has(key) ? 1 : DIM_FACTOR);
+        return a * b * c;
       };
 
       // Edges
@@ -755,7 +808,7 @@ function RadarCanvasInner({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, isolatedNodes, isolatedEdgeKeys, diffEdgeMap, vp.viewportRef]);
+  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, isolatedNodes, isolatedEdgeKeys, tracedNodes, tracedEdgeKeys, diffEdgeMap, vp.viewportRef]);
 
   const anomalyEdgeCount = useMemo(
     () => visibleTx.filter(t => t.anomaly > 0.7).length, [visibleTx],

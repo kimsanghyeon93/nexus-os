@@ -163,8 +163,16 @@ export default function App({
   // the relationship between a focused node and unrelated regions.
   const [isolatedId, setIsolatedId] = useState<string | null>(null);
 
-  // Tiny toast for command feedback (⌘I lock/unlock, ⌘R no-shock,
-  // ⌘T/⌘L stubs). Auto-clears after 2.4s.
+  // Sprint 5o-C-2: Trace flow path. When set, RadarCanvas dims everything
+  // except the downstream cone reachable via directed edges from this
+  // entity (forward BFS, max 4 hops). Independent of isolatedId — both
+  // can be locked simultaneously and compose multiplicatively (DIM_FACTOR²
+  // for nodes/edges outside both sets) so the operator can simultaneously
+  // see "X's neighborhood" + "Y's downstream cone" without losing either.
+  const [tracedId, setTracedId] = useState<string | null>(null);
+
+  // Tiny toast for command feedback (⌘I/⌘T lock/unlock, ⌘R no-shock,
+  // ⌘L stub). Auto-clears after 2.4s.
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => {
     if (!toast) return;
@@ -267,21 +275,40 @@ export default function App({
       return;
     }
 
-    // ── Stubs for Sprint 5o-C / 5p ─────────────────────────────────
+    // ⌘T Trace flow path (Sprint 5o-C-2): three-way toggle, mirroring ⌘I.
+    //   no selection             → toast "select first"
+    //   selected === traced      → clear trace (toast "Trace cleared")
+    //   traced set, different    → switch focus (toast "Tracing flow: X")
+    //   trace off, selection set → engage (toast "Tracing flow: X")
+    // State is independent of isolatedId so both can be active
+    // simultaneously — closures in RadarCanvas compose them multiplicatively.
+    if (id === 'trace') {
+      if (!selectedEntity) {
+        setToast('Select an entity first to trace');
+        return;
+      }
+      if (tracedId === selectedEntity.id) {
+        setTracedId(null);
+        setToast('Trace cleared');
+        console.info('[NEXUS] trace cleared');
+        return;
+      }
+      setTracedId(selectedEntity.id);
+      setToast(`Tracing flow: ${selectedEntity.label}`);
+      console.info(`[NEXUS] trace · ${selectedEntity.id} (${selectedEntity.label})`);
+      return;
+    }
+
+    // ── Remaining stub for Sprint 5o-C-3 ───────────────────────────
     // Logged + toasted so the operator knows the binding works and the
     // feature is on the roadmap — silent no-ops are worse UX than honest
     // "coming soon" feedback.
-    if (id === 'trace' || id === 'audit') {
-      const labels: Record<string, string> = {
-        trace: 'Trace flow path',
-        audit: 'Audit transactions',
-      };
-      const label = labels[id];
-      console.info(`[NEXUS] ${label} (id=${id}) — wiring lands in Sprint 5o-C`);
-      setToast(`${label}: coming in Sprint 5o-C`);
+    if (id === 'audit') {
+      console.info('[NEXUS] Audit transactions (id=audit) — wiring lands in Sprint 5o-C-3');
+      setToast('Audit transactions: coming in Sprint 5o-C-3');
       return;
     }
-  }, [dataset, toggleBootTour, isControlled, controlledSelectedId, internalSelectedId, streamer, isolatedId]);
+  }, [dataset, toggleBootTour, isControlled, controlledSelectedId, internalSelectedId, streamer, isolatedId, tracedId]);
 
   // Clear the new-entry pulse 700ms after it fires so subsequent captures
   // can re-pulse the topmost row even if it has the same id (rare).
@@ -520,6 +547,7 @@ export default function App({
           diffMap={diffMap}
           diffFilter={diffFilter}
           isolatedId={isolatedId}
+          tracedId={tracedId}
         />
 
         <div className="nx-app__right">
