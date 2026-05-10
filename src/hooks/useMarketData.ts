@@ -220,7 +220,7 @@ function buildDataset(): NexusDataset {
     });
   });
 
-  // KRX cluster
+  // KRX cluster — abstract sector aggregates (semantic grouping nodes)
   placeMembers(CLUSTERS[8]!, [
     { id: 'KRX_SEMI', label: 'KRX Semiconductors', type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.74, sanctioned: false, txVol: 3900 },
     { id: 'KRX_BATT', label: 'KRX Battery / EV',   type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.62, sanctioned: false, txVol: 2100 },
@@ -233,6 +233,52 @@ function buildDataset(): NexusDataset {
     { id: 'USDKRW',   label: 'USD / KRW',          type: 'fx',            jurisdiction: '—',  anomaly: 0.66, sanctioned: false, txVol: 2200 },
     { id: 'KOSPI',    label: 'KOSPI Index',        type: 'macro',         jurisdiction: 'KR', anomaly: 0.42, sanctioned: false, txVol: 3800 },
   ], 9);
+
+  // Individual KRX tickers — IDs match the backend's KIS subscription
+  // universe (`Settings.kis_subscribe_symbols`) + db/seeds/dev.sql. Tick
+  // mutations from BackendStreamer carry these exact 6-digit codes as
+  // entityId, so the hook's `liveDataset.ENTITIES.find(e => e.id === m.entityId)`
+  // resolves on first tick. Anomaly + cluster classification mirror dev.sql
+  // so frontend-only render and DB snapshot agree at boot.
+  placeMembers(CLUSTERS[8]!, [
+    // TECH (semi + internet)
+    { id: '005930', label: 'Samsung Electronics', type: 'equity', jurisdiction: 'KR', anomaly: 0.12, sanctioned: false, txVol: 8400 },
+    { id: '000660', label: 'SK Hynix',            type: 'equity', jurisdiction: 'KR', anomaly: 0.18, sanctioned: false, txVol: 3220 },
+    { id: '035420', label: 'NAVER',               type: 'equity', jurisdiction: 'KR', anomaly: 0.71, sanctioned: false, txVol: 1180 },
+    { id: '035720', label: 'Kakao',               type: 'equity', jurisdiction: 'KR', anomaly: 0.22, sanctioned: false, txVol:  842 },
+    // FINANCE
+    { id: '105560', label: 'KB Financial',        type: 'equity', jurisdiction: 'KR', anomaly: 0.08, sanctioned: false, txVol: 1540 },
+    { id: '055550', label: 'Shinhan Financial',   type: 'equity', jurisdiction: 'KR', anomaly: 0.11, sanctioned: false, txVol: 1310 },
+    { id: '086790', label: 'Hana Financial',      type: 'equity', jurisdiction: 'KR', anomaly: 0.09, sanctioned: false, txVol:  990 },
+    // MANUFACTURING (auto + steel + chemical)
+    { id: '005380', label: 'Hyundai Motor',       type: 'equity', jurisdiction: 'KR', anomaly: 0.27, sanctioned: false, txVol: 1910 },
+    { id: '005490', label: 'POSCO Holdings',      type: 'equity', jurisdiction: 'KR', anomaly: 0.31, sanctioned: false, txVol: 1240 },
+    { id: '051910', label: 'LG Chem',             type: 'equity', jurisdiction: 'KR', anomaly: 0.68, sanctioned: false, txVol: 2080 },
+    // BIO
+    { id: '207940', label: 'Samsung Biologics',   type: 'equity', jurisdiction: 'KR', anomaly: 0.14, sanctioned: false, txVol:  720 },
+    { id: '068270', label: 'Celltrion',           type: 'equity', jurisdiction: 'KR', anomaly: 0.19, sanctioned: false, txVol:  620 },
+  ], 91);
+
+  // Wire each individual ticker to its sector aggregate so the canvas
+  // shows the meaningful semantic edges (e.g. Samsung+Hynix → KRX_SEMI).
+  const krxTickerLinks: [string, string, number][] = [
+    ['005930','KRX_SEMI',0.74], ['000660','KRX_SEMI',0.74],
+    ['035420','KRX_SEMI',0.41], ['035720','KRX_SEMI',0.34],   // internet → loose tie to semi cluster
+    ['105560','KRX_FIN', 0.21], ['055550','KRX_FIN', 0.21], ['086790','KRX_FIN', 0.21],
+    ['005380','KRX_AUTO',0.34], ['005490','KRX_BATT',0.51],   // POSCO supplies battery materials
+    ['051910','KRX_BATT',0.62],
+    ['207940','KRX_BIO', 0.48], ['068270','KRX_BIO', 0.48],
+    // KOSPI index ties for the bellwethers
+    ['005930','KOSPI',0.62], ['000660','KOSPI',0.51], ['005380','KOSPI',0.34],
+  ];
+  krxTickerLinks.forEach(([from, to, anomaly]) => {
+    TX.push({
+      from, to,
+      usd: 500_000 + Math.random() * 30_000_000,
+      n: 2 + ((Math.random() * 12) | 0),
+      anomaly, kind: 'cluster',
+    });
+  });
 
   const krxLinks: [string, string, number][] = [
     ['BOK','USDKRW',0.61], ['BOK','KTB10',0.34], ['BOK','KOSPI',0.41], ['BOK','HUB_CB',0.38],

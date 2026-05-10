@@ -47,7 +47,7 @@ export class BackendStreamer implements IMarketStreamer {
   private pktCounter:      number = 0;
   private telemetryTimer:  number | null = null;
 
-  constructor(private url: string = 'ws://localhost:8000/v1/stream') {}
+  constructor(private url: string = 'ws://localhost:8001/v1/stream') {}
 
   // ── IMarketStreamer ──────────────────────────────────────────────────
 
