@@ -156,8 +156,15 @@ export default function App({
     if (shockTarget) lastShockIdRef.current = shockTarget.id;
   }, [shockTarget]);
 
-  // Tiny toast for "future sprint" stubs (⌘I, ⌘T, ⌘L) so the operator
-  // gets feedback instead of a silent no-op. Auto-clears after 2.4s.
+  // Sprint 5o-C-1: Isolation focus. When set, RadarCanvas dims everything
+  // except this entity + its 1-hop neighbors (DIM_FACTOR = 6%). Distinct
+  // from `selectedId` because operators can keep an isolation locked while
+  // hovering / selecting other entities for inspection — handy for tracing
+  // the relationship between a focused node and unrelated regions.
+  const [isolatedId, setIsolatedId] = useState<string | null>(null);
+
+  // Tiny toast for command feedback (⌘I lock/unlock, ⌘R no-shock,
+  // ⌘T/⌘L stubs). Auto-clears after 2.4s.
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => {
     if (!toast) return;
@@ -238,22 +245,43 @@ export default function App({
       return;
     }
 
+    // ⌘I Isolate entity (Sprint 5o-C-1): three-way toggle.
+    //   no selection         → toast "select first"
+    //   selected === isolated → clear isolation (toast "Isolation lifted")
+    //   isolated set, different selection → switch focus (toast "Isolated: X")
+    //   isolation off, selection set → engage (toast "Isolated: X")
+    if (id === 'isolate') {
+      if (!selectedEntity) {
+        setToast('Select an entity first to isolate');
+        return;
+      }
+      if (isolatedId === selectedEntity.id) {
+        setIsolatedId(null);
+        setToast('Isolation lifted');
+        console.info('[NEXUS] isolation lifted');
+        return;
+      }
+      setIsolatedId(selectedEntity.id);
+      setToast(`Isolated: ${selectedEntity.label}`);
+      console.info(`[NEXUS] isolate · ${selectedEntity.id} (${selectedEntity.label})`);
+      return;
+    }
+
     // ── Stubs for Sprint 5o-C / 5p ─────────────────────────────────
     // Logged + toasted so the operator knows the binding works and the
     // feature is on the roadmap — silent no-ops are worse UX than honest
     // "coming soon" feedback.
-    if (id === 'isolate' || id === 'trace' || id === 'audit') {
+    if (id === 'trace' || id === 'audit') {
       const labels: Record<string, string> = {
-        isolate: 'Isolate entity',
-        trace:   'Trace flow path',
-        audit:   'Audit transactions',
+        trace: 'Trace flow path',
+        audit: 'Audit transactions',
       };
       const label = labels[id];
       console.info(`[NEXUS] ${label} (id=${id}) — wiring lands in Sprint 5o-C`);
       setToast(`${label}: coming in Sprint 5o-C`);
       return;
     }
-  }, [dataset, toggleBootTour, isControlled, controlledSelectedId, internalSelectedId, streamer]);
+  }, [dataset, toggleBootTour, isControlled, controlledSelectedId, internalSelectedId, streamer, isolatedId]);
 
   // Clear the new-entry pulse 700ms after it fires so subsequent captures
   // can re-pulse the topmost row even if it has the same id (rare).
@@ -491,6 +519,7 @@ export default function App({
           diffEdgeMap={diffEdgeMap}
           diffMap={diffMap}
           diffFilter={diffFilter}
+          isolatedId={isolatedId}
         />
 
         <div className="nx-app__right">

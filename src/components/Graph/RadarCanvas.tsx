@@ -99,6 +99,13 @@ export interface RadarCanvasProps {
   diffMap?: ReadonlyMap<string, EntityDelta> | null;
   /** Active filter selected via DiffSummaryCard. Null = no dimming. */
   diffFilter?: DiffFilter;
+  /** Sprint 5o-C-1: Isolate-entity focus mode. When set, renders the
+   * focused entity + its 1-hop neighbors at full opacity and dims
+   * everything else by DIM_FACTOR. Composes multiplicatively with the
+   * diff-filter dim — both "filters" stack so an isolated entity that's
+   * also outside the diff match shows at DIM_FACTOR² (~0.4%). Null
+   * disables isolation entirely. */
+  isolatedId?: string | null;
 }
 
 function RadarCanvasInner({
@@ -110,6 +117,7 @@ function RadarCanvasInner({
   diffEdgeMap = null,
   diffMap     = null,
   diffFilter  = null,
+  isolatedId  = null,
 }: RadarCanvasProps, ref: React.Ref<RadarCanvasHandle>) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -219,6 +227,38 @@ function RadarCanvasInner({
     }
     return out;
   }, [diffFilter, diffMap, diffEdgeMap, visibleTx]);
+
+  /* Sprint 5o-C-1: Isolation neighborhood
+   * - isolatedNodes: focus + 1-hop neighbors via the transactions graph.
+   *   Walks visibleTx once to gather every counterparty whose edge touches
+   *   the focused id. The focused node itself is always included.
+   * - isolatedEdges: edges where AT LEAST one endpoint is the focus
+   *   (so the connecting line stays lit even when the counterparty is
+   *   itself dim — an isolated entity always shows its OWN edges in full).
+   *   We do NOT light internal edges between two neighbors that don't
+   *   touch the focus — keeps the visual hierarchy "focus → neighbors"
+   *   instead of "everything in the neighborhood is equally important".
+   * Returns null when isolatedId is null (no isolation active). */
+  const isolatedNodes = useMemo<ReadonlySet<string> | null>(() => {
+    if (!isolatedId) return null;
+    const out = new Set<string>([isolatedId]);
+    for (const tx of visibleTx) {
+      if (tx.from === isolatedId) out.add(tx.to);
+      else if (tx.to === isolatedId) out.add(tx.from);
+    }
+    return out;
+  }, [isolatedId, visibleTx]);
+
+  const isolatedEdgeKeys = useMemo<ReadonlySet<string> | null>(() => {
+    if (!isolatedId) return null;
+    const out = new Set<string>();
+    for (const tx of visibleTx) {
+      if (tx.from === isolatedId || tx.to === isolatedId) {
+        out.add(`${tx.from}->${tx.to}`);
+      }
+    }
+    return out;
+  }, [isolatedId, visibleTx]);
 
   // Build sim state when entities change
   useEffect(() => {
@@ -457,6 +497,34 @@ function RadarCanvasInner({
       const byId: Record<string, SimNode> = {};
       sim.nodes.forEach(n => { byId[n.id] = n; });
 
+      /* Sprint 5o-C-1: Composed dim factors. Diff filter and isolation
+       * apply independently — multiplying makes both filters cooperate
+       * (an entity outside both gets DIM_FACTOR² ≈ 0.4%; outside one is
+       * the standard ~6%). Closures avoid 4× repetition across halo /
+       * body / label / edge render passes. */
+      const entityDim = (id: string): number => {
+        const a = matchedEntities === null
+          ? 1 : (matchedEntities.has(id) ? 1 : DIM_FACTOR);
+        const b = isolatedNodes === null
+          ? 1 : (isolatedNodes.has(id) ? 1 : DIM_FACTOR);
+        return a * b;
+      };
+      const edgeDim = (key: string, fromId: string, toId: string): number => {
+        const a = matchedEdgeKeys === null
+          ? 1 : (matchedEdgeKeys.has(key) ? 1 : DIM_FACTOR);
+        // Edge dim semantics differ slightly: an edge stays lit if it
+        // touches the focus (handled via isolatedEdgeKeys) — but if BOTH
+        // endpoints are dim'd nodes, the edge between them must also dim
+        // even if it's technically "between two neighbors of focus".
+        const touchesFocus = isolatedEdgeKeys === null
+          ? true : isolatedEdgeKeys.has(key);
+        const bothInIso = isolatedNodes === null
+          ? true : (isolatedNodes.has(fromId) && isolatedNodes.has(toId));
+        const b = (isolatedEdgeKeys === null) || touchesFocus || bothInIso
+          ? 1 : DIM_FACTOR;
+        return a * b;
+      };
+
       // Edges
       ctx.lineWidth = 1;
       for (let i = 0; i < visibleTx.length; i++) {
@@ -473,10 +541,8 @@ function RadarCanvasInner({
         // patterns are local to this iteration; the reset after the loop
         // (CRITICAL) prevents leakage into particles / halos / labels.
         const diffKind = diffEdgeMap?.get(`${tx.from}->${tx.to}`);
-        // Diff filter dim — non-matching edges fade to ghost.
-        const edgeMatch = matchedEdgeKeys === null
-          ? 1
-          : (matchedEdgeKeys.has(`${tx.from}->${tx.to}`) ? 1 : DIM_FACTOR);
+        // Diff filter + isolation dim composed via edgeDim() helper.
+        const edgeMatch = edgeDim(`${tx.from}->${tx.to}`, tx.from, tx.to);
         if (diffKind === 'new') {
           ctx.setLineDash([8, 6]);
           ctx.strokeStyle = COLOR.amber;
@@ -615,9 +681,7 @@ function RadarCanvasInner({
         const ad = angDist(nodeAng, sweepAngle);
         const scanBoost = Math.max(0, 1 - ad / (Math.PI / 5));
 
-        const entityMatch = matchedEntities === null
-          ? 1
-          : (matchedEntities.has(n.id) ? 1 : DIM_FACTOR);
+        const entityMatch = entityDim(n.id);
         const haloR = r * (3 + glowIntensity * 0.6 + scanBoost * 1.2);
         const halo = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, haloR);
         const haloAlpha = ((isSel || isHover ? 0.55 : 0.32) + scanBoost * 0.30 + (isAnomaly ? 0.1 : 0)) * entityMatch;
@@ -636,9 +700,7 @@ function RadarCanvasInner({
         const isSel = n.id === selectedId;
         const isHover = n.id === hoverId;
         const accent = nodeAccentColor(n.ref);
-        const dim = matchedEntities === null
-          ? 1
-          : (matchedEntities.has(n.id) ? 1 : DIM_FACTOR);
+        const dim = entityDim(n.id);
 
         ctx.globalAlpha = dim;
         ctx.fillStyle = COLOR.void;
@@ -679,9 +741,7 @@ function RadarCanvasInner({
         const showLabel = n.isHub || n.id === selectedId || n.id === hoverId;
         if (!showLabel) continue;
         const r = radiusOf(n.ref);
-        const dim = matchedEntities === null
-          ? 1
-          : (matchedEntities.has(n.id) ? 1 : DIM_FACTOR);
+        const dim = entityDim(n.id);
         ctx.globalAlpha = dim;
         ctx.fillStyle = (n.id === selectedId || n.id === hoverId) ? COLOR.bone : COLOR.ash;
         const label = n.isHub ? n.ref.label.toUpperCase() : n.id;
@@ -695,7 +755,7 @@ function RadarCanvasInner({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, diffEdgeMap, vp.viewportRef]);
+  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, isolatedNodes, isolatedEdgeKeys, diffEdgeMap, vp.viewportRef]);
 
   const anomalyEdgeCount = useMemo(
     () => visibleTx.filter(t => t.anomaly > 0.7).length, [visibleTx],
