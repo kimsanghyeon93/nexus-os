@@ -416,6 +416,11 @@ const BODY: React.CSSProperties = {
   flex:      1,
   overflowY: 'auto',
   padding:   '16px 20px',
+  // Firefox scrollbar styling — WebKit/Blink uses the pseudo-elements
+  // injected at the bottom of this file (CSS-in-React-style props don't
+  // support ::-webkit-scrollbar).
+  scrollbarWidth: 'thin',
+  scrollbarColor: 'rgba(0, 191, 255, 0.35) transparent',
 };
 
 const FOOTER: React.CSSProperties = {
@@ -603,12 +608,37 @@ const ROW_ORDER_ID: React.CSSProperties = {
   textTransform: 'uppercase',
 };
 
-// Spinner keyframes are injected once on mount via a styled <style> block
-// in the modal so we don't have to edit nexus.css. Idempotent — same id
-// per module so multiple opens don't multiply the rule.
+// Animation + scrollbar styling injected once at module load. Idempotent
+// via the deduped #id so multiple opens don't multiply the rule. Inline
+// CSS-in-React doesn't reach ::-webkit-scrollbar pseudo-elements, so the
+// WebKit/Blink path needs a real stylesheet rule. Firefox uses the
+// `scrollbarWidth` / `scrollbarColor` props on BODY directly.
+//
+// We scope the scrollbar rule to `[data-testid="audit-modal"] *` so it
+// can't bleed into the rest of the app. The thin track + cyan thumb
+// match the modal's frame border so the chrome reads as one element.
 if (typeof document !== 'undefined' && !document.getElementById('nx-audit-spin-css')) {
   const style = document.createElement('style');
   style.id = 'nx-audit-spin-css';
-  style.textContent = '@keyframes nxAuditSpin { to { transform: rotate(360deg); } }';
+  style.textContent = `
+    @keyframes nxAuditSpin { to { transform: rotate(360deg); } }
+    [data-testid="audit-modal"] ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    [data-testid="audit-modal"] ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    [data-testid="audit-modal"] ::-webkit-scrollbar-thumb {
+      background: rgba(0, 191, 255, 0.28);
+      border-radius: 3px;
+    }
+    [data-testid="audit-modal"] ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 191, 255, 0.55);
+    }
+    [data-testid="audit-modal"] ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+  `;
   document.head.appendChild(style);
 }
