@@ -3,11 +3,12 @@
 // inspector. Purple-tinted accents for AI-derived metrics; cyan for hard
 // telemetry. When no selection exists, shows a "no target locked" state.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { NexusEdge, NexusEntity } from '../../types/nexus';
 import type { EntityDelta } from '../../utils/diff';
 import { fetchRecentAudit } from '../../services/auditApi';
-import type { AuditRow } from '../../types/api';
+import { fetchRecentTicks } from '../../services/marketApi';
+import type { AuditRow, MarketTick } from '../../types/api';
 
 export interface PropertyHUDProps {
   entity: NexusEntity | null;
@@ -80,6 +81,7 @@ function EntityCard({ entity, transactions, onSelect, delta }: EntityCardProps) 
     .sort((a, b) => b.usd - a.usd)
     .slice(0, 5);
   const anomalyHistory = useAnomalyHistory(entity);
+  const priceTicks = useRecentTicks(entity.id);
 
   return (
     <section className="nx-prop__body">
@@ -97,7 +99,9 @@ function EntityCard({ entity, transactions, onSelect, delta }: EntityCardProps) 
         </div>
       </div>
 
-      <Sparkline values={anomalyHistory} tone={tone} />
+      {priceTicks.length > 0
+        ? <PriceSparkline ticks={priceTicks} tone={tone} />
+        : <Sparkline values={anomalyHistory} tone={tone} />}
 
       {isDiff ? (
         <div className="nx-prop__metrics nx-prop__metrics--diff">
@@ -468,3 +472,167 @@ const TONE_TO_STROKE: Record<SparklineProps['tone'], string> = {
   amber:  'var(--amber)',
   purple: 'var(--purple-soft)',
 };
+
+/* ------------------------------------------------------------------ */
+/*  PriceSparkline — Sprint 5p-C, real per-tick prices                 */
+/* ------------------------------------------------------------------ */
+//  Polls /v1/ticks/recent for the selected entity and renders the
+//  price trace. Distinct from the anomaly Sparkline above:
+//   • Y-axis auto-ranges to the min/max of the window (so an asset
+//     that fluctuates 0.2% reads as much movement as one that
+//     fluctuates 5% — the operator gets shape, not absolute level).
+//   • Shows current price + % delta vs window-start on the right.
+//   • Tone follows the trend (lime up / amber down / cyan flat).
+//  Polls at 2s; matches the average KIS tick cadence per symbol so
+//  the trace fills in promptly without hammering the API.
+
+const TICK_POLL_INTERVAL_MS = 2000;
+const TICK_FETCH_LIMIT      = 60;
+
+/** Custom hook — returns oldest→newest ordered ticks for the current
+ *  symbol. Empty list when the symbol has no audit history (synthetic
+ *  entity), which the parent uses to decide between price sparkline
+ *  and the anomaly fallback. */
+function useRecentTicks(symbol: string): MarketTick[] {
+  const [ticks, setTicks] = useState<MarketTick[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    let ctrl: AbortController | null = null;
+
+    const pull = async () => {
+      ctrl?.abort();
+      ctrl = new AbortController();
+      const result = await fetchRecentTicks(symbol, {
+        limit:  TICK_FETCH_LIMIT,
+        signal: ctrl.signal,
+      });
+      if (!mounted) return;
+      if (result.ok) {
+        // API returns newest-first; reverse so x-axis is left=older.
+        setTicks([...result.data.ticks].reverse());
+      }
+      // Silent on failure — keep last frame, next poll retries. The
+      // ⌘L modal is the canonical surface for error display.
+    };
+
+    setTicks([]);
+    pull();
+    const id = setInterval(pull, TICK_POLL_INTERVAL_MS);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+      ctrl?.abort();
+    };
+  }, [symbol]);
+
+  return ticks;
+}
+
+interface PriceSparklineProps {
+  ticks: MarketTick[];
+  /** Fallback tone if we can't compute a trend (single tick / flat). */
+  tone:  'cyan' | 'lime' | 'amber' | 'purple';
+}
+
+function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProps) {
+  const W = 240;
+  const H = 36;
+
+  // Derive window stats. Auto-range to min/max so a 0.2% wiggle reads
+  // as fully as a 5% swing; absolute level is reported as text instead.
+  const stats = useMemo(() => {
+    if (ticks.length === 0) return null;
+    let min = Infinity, max = -Infinity;
+    for (const t of ticks) {
+      if (t.price < min) min = t.price;
+      if (t.price > max) max = t.price;
+    }
+    const first = ticks[0]!.price;
+    const last  = ticks[ticks.length - 1]!.price;
+    const pctDelta = first !== 0 ? ((last - first) / first) * 100 : 0;
+    return { min, max, first, last, pctDelta };
+  }, [ticks]);
+
+  if (!stats || ticks.length < 2) {
+    return (
+      <div className="nx-prop__spark">
+        <div className="nx-label">PRICE · LIVE</div>
+        <div className="nx-prop__spark-empty">— acquiring tape —</div>
+      </div>
+    );
+  }
+
+  const tone: PriceSparklineProps['tone'] =
+    stats.pctDelta > 0.05 ? 'lime'
+    : stats.pctDelta < -0.05 ? 'amber'
+    : fallbackTone;
+  const stroke = TONE_TO_STROKE[tone];
+  const range  = Math.max(1e-9, stats.max - stats.min);
+
+  const points = ticks.map((t, i) => {
+    const x = (i / (ticks.length - 1)) * W;
+    const y = H - ((t.price - stats.min) / range) * H;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  const last = ticks[ticks.length - 1]!;
+  const lastX = W;
+  const lastY = H - ((last.price - stats.min) / range) * H;
+
+  return (
+    <div className="nx-prop__spark" data-testid="price-sparkline">
+      <div className="nx-prop__spark-head">
+        <span className="nx-label">PRICE · LIVE</span>
+        <span className="nx-mono-dim" style={{ fontSize: 9 }}>
+          {ticks.length} ticks
+        </span>
+      </div>
+      <svg
+        width="100%"
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        style={{ display: 'block' }}
+      >
+        <polyline
+          points={points}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={1}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          opacity={0.95}
+          style={{ filter: `drop-shadow(0 0 3px ${stroke})` }}
+        />
+        <circle
+          cx={lastX}
+          cy={lastY}
+          r={1.8}
+          fill={stroke}
+          style={{ filter: `drop-shadow(0 0 4px ${stroke})` }}
+        />
+      </svg>
+      <div
+        className="nx-mono-dim"
+        style={{
+          display: 'flex', justifyContent: 'space-between',
+          fontSize: 9, marginTop: 2,
+        }}
+      >
+        <span>{formatPrice(stats.last)}</span>
+        <span style={{ color: `var(--${tone === 'amber' ? 'amber' : tone === 'lime' ? 'lime' : 'fg-low'})` }}>
+          {stats.pctDelta >= 0 ? '+' : ''}{stats.pctDelta.toFixed(2)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function formatPrice(p: number): string {
+  // KRW prices land in tens-of-thousands range; show with thousands
+  // separators and 0-2 decimals depending on magnitude.
+  if (p >= 1000) return p.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  if (p >= 1)    return p.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return p.toFixed(4);
+}

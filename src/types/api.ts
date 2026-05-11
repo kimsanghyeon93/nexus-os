@@ -126,6 +126,25 @@ export interface AuditRecentDTO {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+//  /v1/ticks/recent — Sprint 5p-C (price sparkline data path)
+// ──────────────────────────────────────────────────────────────────────
+
+/** One raw tick row from `market_tick`. Drives the PropertyHUD price
+ *  sparkline — per-tick resolution inside the current minute, distinct
+ *  from the 1m-OHLC continuous aggregate. */
+export interface MarketTick {
+  ts:     string;             // ISO 8601 UTC
+  price:  number;             // KRW for KIS symbols; USD for synthetic
+  volume: number;
+  side:   'buy' | 'sell';
+}
+
+export interface MarketTickRecentDTO {
+  symbol: string;
+  ticks:  MarketTick[];
+}
+
+// ──────────────────────────────────────────────────────────────────────
 //  ApiResult — discriminated union the wrapper returns
 // ──────────────────────────────────────────────────────────────────────
 

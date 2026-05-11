@@ -58,7 +58,7 @@ export default function App({
 }: AppProps = {}) {
   const {
     dataset, telemetry, sso, shockTarget, connectionState,
-    isReplaying, isDiffing, diffMap, diffEdgeMap,
+    isReplaying, isDiffing, diffMap, diffEdgeMap, liveEntityIds,
     replayDataset, diffSnapshot, resumeLive,
   } = useMarketData(streamer);
   const { ENTITIES, TX, CLUSTERS } = dataset;
@@ -565,6 +565,7 @@ export default function App({
           diffFilter={diffFilter}
           isolatedId={isolatedId}
           tracedId={tracedId}
+          liveEntityIds={liveEntityIds}
         />
 
         <div className="nx-app__right">

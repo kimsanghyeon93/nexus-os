@@ -116,6 +116,14 @@ export interface RadarCanvasProps {
    * X" (1-hop undirected), ⌘T shows "where does flow from X reach"
    * (multi-hop directed). Null disables tracing entirely. */
   tracedId?: string | null;
+  /** Sprint 5p-B: Entities that received a tick within the last ~3s.
+   * Drives a thin lime pulse ring at radius ~1.7× the node body so the
+   * operator can tell at a glance which nodes are currently being
+   * driven by the active streamer (12 KIS-subscribed symbols on
+   * BACKEND·LIVE, the full Momentum universe on MOMENTUM·LIVE). The
+   * ring breathes via sin(t·π) ∈ [0.4, 1.0] so a static screenshot
+   * still reads "this one's alive". Empty set = no pulse rendered. */
+  liveEntityIds?: ReadonlySet<string>;
 }
 
 function RadarCanvasInner({
@@ -129,6 +137,7 @@ function RadarCanvasInner({
   diffFilter  = null,
   isolatedId  = null,
   tracedId    = null,
+  liveEntityIds,
 }: RadarCanvasProps, ref: React.Ref<RadarCanvasHandle>) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -786,6 +795,36 @@ function RadarCanvasInner({
         ctx.globalAlpha = 1;
       }
 
+      // Sprint 5p-B: Live-tick pulse rings. Drawn AFTER node bodies so
+      // the ring sits on top of the body stroke but BEFORE labels (we
+      // don't want labels behind a glowing ring). The breath uses the
+      // ambient `t` clock so all live nodes pulse in sync — operators
+      // tend to register "alive" faster from synchronized motion than
+      // from random per-node phases. Composes with entityDim so a
+      // dim'd-but-live node still shows a faint pulse hint rather than
+      // disappearing entirely.
+      if (liveEntityIds && liveEntityIds.size > 0) {
+        const breath = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * Math.PI * 1.4));
+        ctx.globalCompositeOperation = 'lighter';
+        for (const n of sim.nodes) {
+          if (!liveEntityIds.has(n.id)) continue;
+          const r = radiusOf(n.ref);
+          const dim = entityDim(n.id);
+          const ringR = r * 1.75 + 2;
+          ctx.globalAlpha = 0.55 * breath * dim;
+          ctx.strokeStyle = COLOR.lime;
+          ctx.lineWidth = 1.2;
+          ctx.shadowColor = COLOR.lime;
+          ctx.shadowBlur = 6 * glowIntensity;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
       // Labels
       ctx.font = '500 9px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
@@ -808,7 +847,7 @@ function RadarCanvasInner({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, isolatedNodes, isolatedEdgeKeys, tracedNodes, tracedEdgeKeys, diffEdgeMap, vp.viewportRef]);
+  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, isolatedNodes, isolatedEdgeKeys, tracedNodes, tracedEdgeKeys, liveEntityIds, diffEdgeMap, vp.viewportRef]);
 
   const anomalyEdgeCount = useMemo(
     () => visibleTx.filter(t => t.anomaly > 0.7).length, [visibleTx],

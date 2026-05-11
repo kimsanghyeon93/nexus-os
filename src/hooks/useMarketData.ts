@@ -442,6 +442,13 @@ export interface UseMarketDataResult {
   /** Per-edge diff classification — `${from}->${to}` → 'new' | 'broken'.
    *  RadarCanvas reads this in its edge loop to apply dashed strokes. */
   diffEdgeMap: ReadonlyMap<string, EdgeDiffKind> | null;
+  /** Entities that received a tick within `LIVE_WINDOW_MS`. Drives the
+   *  RadarCanvas "live pulse" overlay so the operator can see which
+   *  nodes the streamer is actively driving (12 KIS-subscribed tickers
+   *  on BACKEND·LIVE, the full Momentum universe on MOMENTUM·LIVE,
+   *  random subsets on synthetic sources). Refresh cadence is 1Hz
+   *  regardless of tick rate to keep React renders bounded. */
+  liveEntityIds: ReadonlySet<string>;
   /** Swap the active dataset to a dropped snapshot and pause the streamer. */
   replayDataset: (next: NexusDataset) => void;
   /** Compare the dropped snapshot against live without swapping the dataset.
@@ -475,6 +482,16 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
 
   const shockNonceRef = useRef(0);
   const [shockTarget, setShockTarget] = useState<ShockSignal | null>(null);
+
+  // Sprint 5p-B: per-entity last-tick timestamp ledger. Mutated on every
+  // incoming packet (cheap, no React update) and read by a 1s sweep that
+  // publishes a new `liveEntityIds` set whenever membership changes.
+  // Window = 3s — long enough to bridge short tick droughts (KIS Paper
+  // can go quiet for 1-2s between prints), short enough to keep the
+  // visual indicator meaningful as "currently being driven."
+  const LIVE_WINDOW_MS = 3000;
+  const lastTickAtRef = useRef<Map<string, number>>(new Map());
+  const [liveEntityIds, setLiveEntityIds] = useState<ReadonlySet<string>>(new Set());
   const [streamerState, setStreamerState] = useState<ConnectionState>(
     streamer?.connectionState ?? 'connected',
   );
@@ -498,6 +515,7 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
         if (isReplaying) return;
         // Apply mutations in-place against the live dataset. Linear scan is
         // fine at <=120pkt/s with ~80 entities — the harness stress-test point.
+        const now = Date.now();
         for (const m of p.mutations) {
           const ent = liveDataset.ENTITIES.find(e => e.id === m.entityId);
           if (!ent) continue;
@@ -505,6 +523,9 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
             ent.txVol = Math.max(0, ent.txVol + m.txVolDelta);
           }
           if (m.anomaly != null) ent.anomaly = m.anomaly;
+          // Stamp the per-entity tick clock — read by the 1s liveEntityIds
+          // sweep below. Map mutation, no setState in this hot path.
+          lastTickAtRef.current.set(m.entityId, now);
         }
       });
 
@@ -565,6 +586,27 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
     () => ({ protocol: 'SAML 2.0', verified: true, expiresIn: '04:12:38' }),
     [],
   );
+
+  // Sprint 5p-B: 1Hz sweep over the last-tick ledger to publish a fresh
+  // liveEntityIds set whenever membership crosses the window boundary.
+  // We compare to the previous set by size+content to avoid spurious
+  // rerenders when the same 12 KIS symbols keep ticking — the canvas
+  // would only re-pulse, not change its visible state.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const cutoff = Date.now() - LIVE_WINDOW_MS;
+      const next = new Set<string>();
+      for (const [eid, ts] of lastTickAtRef.current) {
+        if (ts >= cutoff) next.add(eid);
+      }
+      setLiveEntityIds(prev => {
+        if (prev.size !== next.size) return next;
+        for (const id of next) if (!prev.has(id)) return next;
+        return prev; // identical membership — keep reference for memo stability
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Diff mode state — when active, we hold both per-entity deltas (driving
   // PropertyHUD + canvas node colors) AND per-edge classification (driving
@@ -683,6 +725,7 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
     isDiffing: diffMap !== null,
     diffMap,
     diffEdgeMap,
+    liveEntityIds,
     replayDataset,
     diffSnapshot,
     resumeLive,
