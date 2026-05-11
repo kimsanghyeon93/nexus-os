@@ -13,6 +13,7 @@ import { CaptureHistory } from './components/HUD/CaptureHistory';
 import { DiffSummaryCard } from './components/HUD/DiffSummaryCard';
 import { BootSequenceOverlay } from './components/HUD/BootSequenceOverlay';
 import { AuditModal } from './components/HUD/AuditModal';
+import { KisLiveSnapshot } from './components/HUD/KisLiveSnapshot';
 import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
 import { summarizeDiff, type DiffFilter } from './utils/diff';
@@ -502,6 +503,20 @@ export default function App({
     [ENTITIES, selectedId],
   );
 
+  // Sprint 5p-D KisLiveSnapshot inputs. The panel needs both the
+  // KIS-traded symbol universe (entity.type === 'kr_equity' from the
+  // dataset matches the backend's KIS_SUBSCRIBE_SYMBOLS env list) AND
+  // a symbol → label map for human-readable rendering. Memoized so
+  // the snapshot panel doesn't re-fire its poll effect on every render.
+  const kisSymbols = useMemo<ReadonlyArray<string>>(
+    () => ENTITIES.filter(e => e.type === 'kr_equity').map(e => e.id),
+    [ENTITIES],
+  );
+  const entityMap = useMemo(
+    () => new Map(ENTITIES.map(e => [e.id, e])),
+    [ENTITIES],
+  );
+
   // Aggregate counts that drive the DiffSummaryCard. Recomputed only when a
   // diff session enters or exits — cheap relative to the underlying maps.
   const diffSummary = useMemo(
@@ -587,6 +602,12 @@ export default function App({
                 transactions={TX}
                 onSelect={setSelectedId}
                 diffMap={diffMap}
+              />
+              <KisLiveSnapshot
+                symbols={kisSymbols}
+                entityMap={entityMap}
+                onSelect={setSelectedId}
+                selectedId={selectedId}
               />
               {isDiffing && diffSummary
                 ? <DiffSummaryCard

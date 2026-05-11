@@ -9,6 +9,7 @@
 import type {
   ApiResult,
   MarketTickRecentDTO,
+  MarketTickSnapshotsDTO,
   ProblemDetail,
 } from '../types/api';
 import { PROBLEM_TYPE } from '../types/api';
@@ -109,6 +110,111 @@ export async function fetchRecentTicks(
 
   try {
     const data = await response.json() as MarketTickRecentDTO;
+    return { ok: true, requestId, data };
+  } catch (err) {
+    return {
+      ok:        false,
+      requestId,
+      problem: {
+        type:       PROBLEM_TYPE.INTERNAL,
+        title:      'Bad Response',
+        status:     502,
+        detail:     err instanceof Error ? err.message : 'invalid JSON',
+        request_id: requestId,
+      },
+    };
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  Multi-symbol snapshot — Sprint 5p-D
+// ──────────────────────────────────────────────────────────────────────
+
+export interface FetchSnapshotOptions {
+  baseUrl?: string;
+  signal?:  AbortSignal;
+}
+
+/** Last-tick snapshot for many symbols in one round-trip. Drives the
+ *  right-column KisLiveSnapshot grid; the backend coalesces with
+ *  DISTINCT ON so we don't pay 12 separate fetches. */
+export async function fetchTickSnapshot(
+  symbols: ReadonlyArray<string>,
+  opts: FetchSnapshotOptions = {},
+): Promise<ApiResult<MarketTickSnapshotsDTO>> {
+  const clean = symbols.map(s => s.trim()).filter(s => s.length > 0);
+  if (clean.length === 0) {
+    return {
+      ok:        true,
+      requestId: '-',
+      data:      { requested: [], snapshots: [] },
+    };
+  }
+
+  const base   = opts.baseUrl ?? DEFAULT_BASE_URL;
+  const params = new URLSearchParams({ symbols: clean.join(',') });
+  const url    = `${base}/v1/ticks/snapshot?${params.toString()}`;
+
+  const internalCtrl = new AbortController();
+  const timer = setTimeout(() => internalCtrl.abort(), FETCH_TIMEOUT_MS);
+  const signals: AbortSignal[] = [internalCtrl.signal];
+  if (opts.signal) signals.push(opts.signal);
+  const signal = signals.length === 1 ? signals[0] : anyAbortSignal(signals);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method:  'GET',
+      headers: { 'Accept': 'application/json' },
+      ...(signal !== undefined ? { signal } : {}),
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    const aborted = err instanceof DOMException && err.name === 'AbortError';
+    return {
+      ok:        false,
+      requestId: '-',
+      problem: {
+        type:       PROBLEM_TYPE.NETWORK,
+        title:      aborted ? 'Request Timeout' : 'Network Error',
+        status:     aborted ? 504 : 0,
+        detail:     aborted
+                    ? `Request timed out after ${FETCH_TIMEOUT_MS}ms`
+                    : (err instanceof Error ? err.message : 'fetch failed'),
+        request_id: '-',
+      },
+    };
+  }
+  clearTimeout(timer);
+
+  const requestId = response.headers.get('x-request-id') ?? '-';
+  if (!response.ok) {
+    let problem: ProblemDetail;
+    try {
+      const body = await response.json() as Partial<ProblemDetail>;
+      problem = {
+        type:       body.type   ?? PROBLEM_TYPE.INTERNAL,
+        title:      body.title  ?? `HTTP ${response.status}`,
+        status:     body.status ?? response.status,
+        detail:     body.detail,
+        instance:   body.instance,
+        request_id: body.request_id ?? requestId,
+        ...(body.errors !== undefined ? { errors: body.errors } : {}),
+      };
+    } catch {
+      problem = {
+        type:       PROBLEM_TYPE.INTERNAL,
+        title:      `HTTP ${response.status}`,
+        status:     response.status,
+        detail:     'Response body was not valid JSON',
+        request_id: requestId,
+      };
+    }
+    return { ok: false, requestId, problem };
+  }
+
+  try {
+    const data = await response.json() as MarketTickSnapshotsDTO;
     return { ok: true, requestId, data };
   } catch (err) {
     return {

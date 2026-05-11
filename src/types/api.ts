@@ -144,6 +144,26 @@ export interface MarketTickRecentDTO {
   ticks:  MarketTick[];
 }
 
+/** One-symbol latest-tick snapshot entry. Powers the KisLiveSnapshot
+ *  HUD grid (Sprint 5p-D) — every KIS subscription at a glance. */
+export interface MarketTickSnapshot {
+  symbol: string;
+  ts:     string;
+  price:  number;
+  volume: number;
+  side:   'buy' | 'sell';
+}
+
+export interface MarketTickSnapshotsDTO {
+  /** Symbols as the operator (and the backend) parsed them; preserved
+   *  in order so the HUD can render placeholder rows when a symbol has
+   *  no recorded ticks yet. */
+  requested: string[];
+  /** Symbols with at least one recorded tick. May be shorter than
+   *  `requested` — sort by symbol ascending. */
+  snapshots: MarketTickSnapshot[];
+}
+
 // ──────────────────────────────────────────────────────────────────────
 //  ApiResult — discriminated union the wrapper returns
 // ──────────────────────────────────────────────────────────────────────
