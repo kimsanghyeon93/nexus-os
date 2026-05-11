@@ -438,10 +438,49 @@ html, body, #root {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Sprint 5q+: right column accumulated SystemHealthPanel + KisLiveSnapshot
+   * + VolumeHistogram + TapePanel + PropertyHUD on top of CaptureHistory.
+   * Total height exceeds viewport on standard monitors → explicit
+   * overflow-y so scroll is intentional + lives on ONE container
+   * instead of the browser silently adding a chunky native scrollbar
+   * inside .nx-app__right-content. PropertyHUD keeps its own internal
+   * overflow-y for the entity-card scroll case; this outer scroll
+   * handles inter-panel overflow. */
+  overflow-y: auto;
+  /* Firefox track + thumb tokens — WebKit pseudo-elements below take
+   * the corresponding paint on Chromium/Safari. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 191, 255, 0.35) transparent;
 }
-.nx-app__right-main > .nx-prop    { flex: 1 1 auto; min-height: 0; }
+.nx-app__right-main > .nx-prop    { flex: 0 0 auto; }
 .nx-app__right-main > .nx-hist    { flex: 0 0 auto; }
 .nx-app__right-main > .nx-diffsum { flex: 0 0 auto; }
+
+/* Scoped scrollbar styling for the right column + any panel inside it
+ * that scrolls (PropertyHUD's internal .nx-prop, etc). Matches the
+ * cyan-thin theme already established on AuditModal + TapePanel. */
+.nx-app__right-main::-webkit-scrollbar,
+.nx-prop::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.nx-app__right-main::-webkit-scrollbar-track,
+.nx-prop::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nx-app__right-main::-webkit-scrollbar-thumb,
+.nx-prop::-webkit-scrollbar-thumb {
+  background: rgba(0, 191, 255, 0.28);
+  border-radius: 3px;
+}
+.nx-app__right-main::-webkit-scrollbar-thumb:hover,
+.nx-prop::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 191, 255, 0.55);
+}
+.nx-app__right-main::-webkit-scrollbar-corner,
+.nx-prop::-webkit-scrollbar-corner {
+  background: transparent;
+}
 .nx-app__right-dev {
   flex: 0 0 auto;
   border-top: var(--bw-hair) solid var(--border);
@@ -598,6 +637,8 @@ html, body, #root {
 /* ---------- PropertyHUD (right) ----------------------------- */
 .nx-prop {
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 191, 255, 0.35) transparent;
 }
 .nx-prop__empty {
   padding: var(--s-6) var(--s-4);
