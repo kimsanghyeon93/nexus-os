@@ -536,22 +536,33 @@ interface PriceSparklineProps {
 }
 
 function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProps) {
-  const W = 240;
-  const H = 36;
+  // Layout: price line occupies the top PRICE_H pixels; a 2px gutter
+  // separates it from the volume bars in the bottom VOL_H pixels.
+  // Operators reading the chart pick "price" from the smooth line and
+  // "volume" from the staccato bars without competition — the trick
+  // is keeping each band tight enough that they don't fight.
+  const W       = 240;
+  const PRICE_H = 36;
+  const GUTTER  = 2;
+  const VOL_H   = 10;
+  const H       = PRICE_H + GUTTER + VOL_H;
 
   // Derive window stats. Auto-range to min/max so a 0.2% wiggle reads
   // as fully as a 5% swing; absolute level is reported as text instead.
+  // `maxVol` drives the volume bars' own auto-range so a single big
+  // print isn't drowned by a sea of tiny ones.
   const stats = useMemo(() => {
     if (ticks.length === 0) return null;
-    let min = Infinity, max = -Infinity;
+    let min = Infinity, max = -Infinity, maxVol = 0;
     for (const t of ticks) {
       if (t.price < min) min = t.price;
       if (t.price > max) max = t.price;
+      if (t.volume > maxVol) maxVol = t.volume;
     }
     const first = ticks[0]!.price;
     const last  = ticks[ticks.length - 1]!.price;
     const pctDelta = first !== 0 ? ((last - first) / first) * 100 : 0;
-    return { min, max, first, last, pctDelta };
+    return { min, max, maxVol, first, last, pctDelta };
   }, [ticks]);
 
   if (!stats || ticks.length < 2) {
@@ -572,13 +583,21 @@ function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProps) {
 
   const points = ticks.map((t, i) => {
     const x = (i / (ticks.length - 1)) * W;
-    const y = H - ((t.price - stats.min) / range) * H;
+    const y = PRICE_H - ((t.price - stats.min) / range) * PRICE_H;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
 
   const last = ticks[ticks.length - 1]!;
   const lastX = W;
-  const lastY = H - ((last.price - stats.min) / range) * H;
+  const lastY = PRICE_H - ((last.price - stats.min) / range) * PRICE_H;
+
+  // Volume bar layout: one rect per tick. Width is the slice between
+  // neighbouring x positions minus a 0.4px gap to keep adjacent bars
+  // visually distinct without losing pixel area.
+  const slice = ticks.length > 1 ? W / (ticks.length - 1) : W;
+  const barW  = Math.max(1, slice - 0.4);
+  const volBaseY = PRICE_H + GUTTER + VOL_H;
+  const volMax   = Math.max(1, stats.maxVol);
 
   return (
     <div className="nx-prop__spark" data-testid="price-sparkline">
@@ -595,6 +614,38 @@ function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProps) {
         preserveAspectRatio="none"
         style={{ display: 'block' }}
       >
+        {/* Volume bars, side-coloured. Drawn UNDER the price line so the
+            line takes visual priority where they overlap (they don't —
+            different y-bands — but keeps stacking-order intent explicit). */}
+        {ticks.map((t, i) => {
+          const x = i * slice;
+          const h = (t.volume / volMax) * VOL_H;
+          const y = volBaseY - h;
+          const fill = t.side === 'buy' ? '#DEFF9A' : '#FFB200';
+          return (
+            <rect
+              key={`v-${i}`}
+              x={x}
+              y={y}
+              width={barW}
+              height={h}
+              fill={fill}
+              opacity={0.42}
+            />
+          );
+        })}
+
+        {/* Faint baseline under volume bars so an empty window still
+            reads as a chart rather than a void. */}
+        <line
+          x1={0}
+          y1={volBaseY}
+          x2={W}
+          y2={volBaseY}
+          stroke="rgba(138, 147, 168, 0.30)"
+          strokeWidth={0.5}
+        />
+
         <polyline
           points={points}
           fill="none"

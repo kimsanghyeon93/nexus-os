@@ -164,6 +164,22 @@ export interface MarketTickSnapshotsDTO {
   snapshots: MarketTickSnapshot[];
 }
 
+/** Sprint 5p-E: cross-symbol tape entry. Currently mirrors
+ *  MarketTickSnapshot field shape but kept as a distinct type so the
+ *  forensic surface can diverge (e.g. add a `seq` or `tradeId` later)
+ *  without breaking snapshot consumers. */
+export interface MarketTickTapeEntry {
+  ts:     string;
+  symbol: string;
+  price:  number;
+  volume: number;
+  side:   'buy' | 'sell';
+}
+
+export interface MarketTickTapeDTO {
+  entries: MarketTickTapeEntry[];
+}
+
 // ──────────────────────────────────────────────────────────────────────
 //  ApiResult — discriminated union the wrapper returns
 // ──────────────────────────────────────────────────────────────────────

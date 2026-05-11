@@ -14,6 +14,7 @@ import { DiffSummaryCard } from './components/HUD/DiffSummaryCard';
 import { BootSequenceOverlay } from './components/HUD/BootSequenceOverlay';
 import { AuditModal } from './components/HUD/AuditModal';
 import { KisLiveSnapshot } from './components/HUD/KisLiveSnapshot';
+import { TapePanel } from './components/HUD/TapePanel';
 import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
 import { summarizeDiff, type DiffFilter } from './utils/diff';
@@ -608,6 +609,10 @@ export default function App({
                 entityMap={entityMap}
                 onSelect={setSelectedId}
                 selectedId={selectedId}
+              />
+              <TapePanel
+                symbols={kisSymbols}
+                onSelect={setSelectedId}
               />
               {isDiffing && diffSummary
                 ? <DiffSummaryCard
