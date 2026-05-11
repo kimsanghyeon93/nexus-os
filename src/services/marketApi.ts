@@ -15,6 +15,7 @@ import type {
   ProblemDetail,
 } from '../types/api';
 import { PROBLEM_TYPE } from '../types/api';
+import { httpFetch } from './httpFetch';
 
 const DEFAULT_BASE_URL = 'http://localhost:8001';
 const FETCH_TIMEOUT_MS = 8000;
@@ -60,7 +61,7 @@ export async function fetchRecentTicks(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await httpFetch(url, {
       method:  'GET',
       headers: { 'Accept': 'application/json' },
       ...(signal !== undefined ? { signal } : {}),
@@ -165,7 +166,7 @@ export async function fetchTickSnapshot(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await httpFetch(url, {
       method:  'GET',
       headers: { 'Accept': 'application/json' },
       ...(signal !== undefined ? { signal } : {}),
@@ -283,7 +284,7 @@ export async function fetchTickTape(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await httpFetch(url, {
       method:  'GET',
       headers: { 'Accept': 'application/json' },
       ...(signal !== undefined ? { signal } : {}),
@@ -406,7 +407,7 @@ export async function fetchVolumeWindow(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await httpFetch(url, {
       method:  'GET',
       headers: { 'Accept': 'application/json' },
       ...(signal !== undefined ? { signal } : {}),

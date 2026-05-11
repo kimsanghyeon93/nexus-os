@@ -146,7 +146,7 @@ export function KisLiveSnapshot({
           <span>KIS LIVE</span>
         </div>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
-          {symbols.length} SYMBOLS · 2s POLL
+          {symbols.length} SYMS · 2s
         </span>
       </header>
 

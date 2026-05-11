@@ -87,8 +87,12 @@ export function CommandCenter({ status = 'LISTENING', onCommand }: CommandCenter
             />
           ))}
         </div>
+        {/* Sprint 5q+: the previous "...placeholder" hint leaked dev
+            scaffolding into the operator surface. Replaced with the
+            shortcut grammar the keystroke hotkeys actually consume so
+            the waveform reads as a live coaching strip, not a stub. */}
         <div className="nx-mono-dim" style={{ fontSize: 9, marginTop: 6 }}>
-          “LOCK ON OBSIDIAN HOLDINGS” — placeholder
+          AWAITING COMMAND · ⌘ + A/I/T/L/R/S TO INVOKE
         </div>
       </section>
 

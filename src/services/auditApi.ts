@@ -19,6 +19,7 @@ import type {
   ProblemDetail,
 } from '../types/api';
 import { PROBLEM_TYPE } from '../types/api';
+import { httpFetch } from './httpFetch';
 
 /** Default REST base — sibling of BackendStreamer's WS URL. Mirroring
  *  the override-via-constructor pattern would require threading config
@@ -81,7 +82,7 @@ export async function fetchRecentAudit(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await httpFetch(url, {
       method:  'GET',
       headers: { 'Accept': 'application/json' },
       ...(signal !== undefined ? { signal } : {}),

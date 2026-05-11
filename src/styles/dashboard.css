@@ -451,6 +451,13 @@ html, body, #root {
    * the corresponding paint on Chromium/Safari. */
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 191, 255, 0.35) transparent;
+  /* 14px safe inset on the right edge: the Cowork-mode operator avatar
+   * (and any platform-level UI parked top-right) floats over the
+   * top of the column in dev. Without this padding, RecentDecisions
+   * row text + KisLiveSnapshot header chips read clipped under that
+   * overlay. 14px keeps the row visible without sacrificing the
+   * panel's internal density. */
+  padding-right: 14px;
 }
 .nx-app__right-main > .nx-prop    { flex: 0 0 auto; }
 .nx-app__right-main > .nx-hist    { flex: 0 0 auto; }

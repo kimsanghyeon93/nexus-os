@@ -36,7 +36,13 @@ const DECISIONS_POLL_MS   = 10_000;   // every 10s — buckets are 1-min granula
 const BLOCKED_POLL_MS     = 15_000;   // 15s — distribution moves slower
 const DECISIONS_WINDOW_M  = 30;
 const BLOCKED_WINDOW_M    = 60;
-const STALLED_THRESHOLD_S = 60;       // > this since last decision → STALLED state
+// > this since last bucket's START → STALLED state. The aggregate is
+// minute-truncated server-side, so "12:30 bucket exists" can mean the
+// LAST decision was at 12:30:00 or 12:30:59 — up to 60s of uncertainty
+// either way. Threshold of 90s gives a one-minute margin past the
+// bucket's worst-case start so the panel doesn't flicker into
+// STALLED at every minute boundary during steady operation.
+const STALLED_THRESHOLD_S = 90;
 const RENDER_TICK_MS      = 1000;     // re-render for "Ns AGO" chip without refetch
 
 export function SystemHealthPanel() {
