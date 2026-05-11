@@ -32,6 +32,15 @@ interface BackendTick {
 
 const TELEMETRY_INTERVAL_MS = 1000;
 
+// Reconnect schedule — exponential backoff, capped. The backend's
+// docker-compose health gate can take a few seconds to come up after a
+// rebuild; tighter cadence early, longer cadence after to avoid burning
+// CPU on a host that's offline. Reset to step 0 after every successful
+// onopen so a 12h-uptime stream that drops once doesn't sit at 30s.
+const RECONNECT_DELAYS_MS: ReadonlyArray<number> = [
+  1000, 2000, 4000, 8000, 16000, 30000, 30000, 30000,
+];
+
 export class BackendStreamer implements IMarketStreamer {
   private ws:        WebSocket | null = null;
   private freq:      number = 1;       // Hz — accepted but ignored (backend owns cadence)
@@ -47,12 +56,23 @@ export class BackendStreamer implements IMarketStreamer {
   private pktCounter:      number = 0;
   private telemetryTimer:  number | null = null;
 
+  // Reconnect bookkeeping. `stopped` flips true when the operator
+  // explicitly calls stop() (or switches to a different source) so the
+  // reconnect loop knows to bail. `reconnectStep` is the index into
+  // RECONNECT_DELAYS_MS — capped at the last entry so the schedule
+  // plateaus gracefully.
+  private stopped:         boolean        = false;
+  private reconnectStep:   number         = 0;
+  private reconnectTimer:  number | null  = null;
+
   constructor(private url: string = 'ws://localhost:8001/v1/stream') {}
 
   // ── IMarketStreamer ──────────────────────────────────────────────────
 
   start(frequencyHz: number): void {
     this.freq = frequencyHz;
+    this.stopped = false;
+    this.cancelReconnect();
     if (this.ws !== null) return;          // idempotent — already connecting / connected
     this.setState('connecting');
 
@@ -60,7 +80,7 @@ export class BackendStreamer implements IMarketStreamer {
     try {
       socket = new WebSocket(this.url);
     } catch {
-      this.setState('failed');
+      this.handleConnectionLost('construct-threw');
       return;
     }
 
@@ -68,6 +88,7 @@ export class BackendStreamer implements IMarketStreamer {
 
     socket.onopen = () => {
       this.setState('connected');
+      this.reconnectStep = 0;
       this.startTelemetryTimer();
     };
 
@@ -88,18 +109,21 @@ export class BackendStreamer implements IMarketStreamer {
     };
 
     socket.onerror = () => {
-      this.setState('failed');
+      // Don't transition state here — onerror fires BEFORE onclose, and
+      // both paths converge on handleConnectionLost via onclose. Setting
+      // 'failed' from onerror would race the reconnect logic in onclose.
     };
 
     socket.onclose = () => {
       this.stopTelemetryTimer();
       this.ws = null;
-      // Don't override 'failed' — onerror fires before onclose on hard fail.
-      if (this._state !== 'failed') this.setState('disconnected');
+      this.handleConnectionLost('socket-close');
     };
   }
 
   stop(): void {
+    this.stopped = true;
+    this.cancelReconnect();
     this.stopTelemetryTimer();
     if (this.ws !== null) {
       this.ws.close();
@@ -182,6 +206,39 @@ export class BackendStreamer implements IMarketStreamer {
     if (this._state === next) return;
     this._state = next;
     for (const cb of this.stateSubs) cb(next);
+  }
+
+  /** Single funnel for "socket went away". Decides between auto-reconnect
+   *  (schedule next attempt) and terminal 'disconnected' (operator stopped
+   *  the streamer or switched source). Updates state with what the operator
+   *  will see in the TopBar connection pill. `_reason` is for debugging
+   *  only — not surfaced. */
+  private handleConnectionLost(_reason: string): void {
+    if (this.stopped) {
+      this.setState('disconnected');
+      return;
+    }
+    // Mid-session drop: schedule the next reconnect attempt and reflect
+    // 'reconnecting' so the operator sees the system trying. We DO NOT
+    // surface 'failed' until the schedule runs out (or until a hard
+    // construction error which short-circuits via handleConnectionLost
+    // with `stopped=false` but no socket — same path).
+    this.setState('reconnecting');
+    const step = Math.min(this.reconnectStep, RECONNECT_DELAYS_MS.length - 1);
+    const delay = RECONNECT_DELAYS_MS[step] ?? 30000;
+    this.reconnectStep = step + 1;
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.stopped) return;
+      this.start(this.freq);
+    }, delay);
+  }
+
+  private cancelReconnect(): void {
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 
   private startTelemetryTimer(): void {

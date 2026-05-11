@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { NexusEdge, NexusEntity } from '../../types/nexus';
 import type { EntityDelta } from '../../utils/diff';
+import { fetchRecentAudit } from '../../services/auditApi';
+import type { AuditRow } from '../../types/api';
 
 export interface PropertyHUDProps {
   entity: NexusEntity | null;
@@ -137,8 +139,131 @@ function EntityCard({ entity, transactions, onSelect, delta }: EntityCardProps) 
 
       <FlowList title="INBOUND" edges={inflow} onSelect={onSelect} dir="in" />
       <FlowList title="OUTBOUND" edges={outflow} onSelect={onSelect} dir="out" />
+      <RecentDecisions symbol={entity.id} />
     </section>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/*  RecentDecisions — ambient awareness of the last 3 audit rows     */
+/* ------------------------------------------------------------------ */
+//  Compact pull from /v1/audit/recent so the operator can see the
+//  coordinator's latest verdicts inline without opening the ⌘L modal.
+//  Polls at 5s — slower than the modal's 3s because this is "peripheral
+//  vision", not a deep dive. The panel renders NOTHING when the entity
+//  has no audit history (synthetic non-KIS nodes), so the right column
+//  stays compact for entities the live pipeline doesn't drive.
+//
+//  Error handling is intentionally silent: a fetch failure shows the
+//  last known rows or hides the panel. Reasoning — the ⌘L modal is the
+//  authoritative surface for errors; an inline error chip here would
+//  add noise without changing what the operator can do about it.
+
+interface RecentDecisionsProps {
+  symbol: string;
+}
+
+const RECENT_LIMIT          = 3;
+const RECENT_POLL_INTERVAL  = 5000;
+
+function RecentDecisions({ symbol }: RecentDecisionsProps) {
+  const [rows, setRows] = useState<AuditRow[] | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let ctrl: AbortController | null = null;
+
+    const pull = async () => {
+      ctrl?.abort();
+      ctrl = new AbortController();
+      const result = await fetchRecentAudit(symbol, {
+        limit:  RECENT_LIMIT,
+        signal: ctrl.signal,
+      });
+      if (!mounted) return;
+      if (result.ok) setRows(result.data.rows);
+      // Silent on failure — keep last known frame, next poll retries.
+    };
+
+    // Reset on symbol change so the previous entity's rows don't flash
+    // before the new fetch resolves.
+    setRows(null);
+    pull();
+    const id = setInterval(pull, RECENT_POLL_INTERVAL);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+      ctrl?.abort();
+    };
+  }, [symbol]);
+
+  // No data yet OR explicitly empty (synthetic entity) → hide the panel
+  // entirely so the right column stays compact.
+  if (!rows || rows.length === 0) return null;
+
+  return (
+    <div className="nx-prop__flows" data-testid="property-hud-recent-decisions">
+      <div className="nx-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>RECENT DECISIONS</span>
+        <span className="nx-mono-dim" style={{ fontSize: 8, letterSpacing: '0.06em' }}>
+          ⌘L FOR FULL TRAIL
+        </span>
+      </div>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {rows.map((r, i) => (
+          <li key={`${r.ts}-${i}`} style={miniRowStyle(r)}>
+            <span style={miniBadgeStyle(r)}>
+              {r.executed
+                ? 'FILLED'
+                : r.blocked_by
+                  ? 'BLOCKED'
+                  : r.mode.toUpperCase()}
+            </span>
+            <span style={{ fontSize: 9, color: 'var(--fg-low, #4A5066)' }}>
+              {formatMiniTs(r.ts)}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--fg, #E8ECF5)', flex: 1, textAlign: 'right' }}>
+              {r.signal_action.toUpperCase()} · {(r.signal_confidence * 100).toFixed(0)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function miniRowStyle(_r: AuditRow): React.CSSProperties {
+  return {
+    display:    'flex',
+    alignItems: 'center',
+    gap:        8,
+    padding:    '3px 0',
+    fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+  };
+}
+
+function miniBadgeStyle(r: AuditRow): React.CSSProperties {
+  const color = r.executed   ? '#DEFF9A'
+              : r.blocked_by ? '#FFB200'
+              : r.mode === 'shadow' ? '#00BFFF'
+              : '#8A93A8';
+  return {
+    color,
+    border:        `0.8px solid ${color}`,
+    padding:       '0 5px',
+    fontSize:      8,
+    letterSpacing: '0.08em',
+    borderRadius:  2,
+    minWidth:      48,
+    textAlign:     'center',
+  };
+}
+
+function formatMiniTs(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 interface MetricProps {
