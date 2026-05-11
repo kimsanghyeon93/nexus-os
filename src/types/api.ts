@@ -126,6 +126,42 @@ export interface AuditRecentDTO {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+//  /v1/metrics/* — Sprint 5q observability
+// ──────────────────────────────────────────────────────────────────────
+
+/** One minute-bucket of coordinator decision activity. Drives the
+ *  SystemHealthPanel decisions/min sparkline + alive indicator. */
+export interface DecisionBucket {
+  bucket:    string;   // ISO 8601
+  n_total:   number;
+  n_live:    number;
+  n_shadow:  number;
+  n_noop:    number;
+  n_blocked: number;
+}
+
+export interface DecisionRateDTO {
+  window_minutes: number;
+  /** Newest-first; reverse on the client for the left-to-right time axis. */
+  buckets:        DecisionBucket[];
+}
+
+export interface BlockedReason {
+  guard_id:      string;
+  n_blocked:     number;
+  last_fired_at: string;   // ISO 8601
+}
+
+export interface BlockedReasonsDTO {
+  window_minutes: number;
+  /** Pre-summed across reasons so the HUD doesn't have to reduce
+   *  client-side just to label the panel ("N BLOCKED · 60M"). */
+  total_blocked:  number;
+  /** Sorted descending by n_blocked at the SQL layer. */
+  reasons:        BlockedReason[];
+}
+
+// ──────────────────────────────────────────────────────────────────────
 //  /v1/ticks/recent — Sprint 5p-C (price sparkline data path)
 // ──────────────────────────────────────────────────────────────────────
 
