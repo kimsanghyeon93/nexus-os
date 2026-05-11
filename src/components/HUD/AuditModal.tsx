@@ -19,12 +19,13 @@
 // only, so the modal carries its own theming and we don't have to touch
 // nexus.css for a single command surface.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchRecentAudit } from '../../services/auditApi';
 import type { ApiResult, AuditRecentDTO, AuditRow } from '../../types/api';
 
 const ROW_LIMIT = 20;
+const AUTO_REFRESH_INTERVAL_MS = 3000;
 
 export interface AuditModalProps {
   /** Mounted when truthy (parent controls). */
@@ -71,14 +72,48 @@ interface AuditModalInnerProps {
 function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerProps) {
   const [state, setState] = useState<AuditFetchState>({ kind: 'loading' });
   const [retryToken, setRetryToken] = useState(0);
+  // Auto-refresh is the default — coordinator decisions land at ~2/sec
+  // during market hours, so a static snapshot is borderline useless for
+  // live KIS monitoring. Operator can pause via the LIVE toggle when
+  // they need a stable frame to read carefully (e.g. comparing two
+  // adjacent rows or copying a reason). Pauses also cancel the poll
+  // immediately so the visible "UPDATED Ns AGO" badge stops ticking.
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [pollTick, setPollTick] = useState(0);
+  // Wall-clock of the last successful fetch, used by the "UPDATED N AGO"
+  // chip. Stored in state (not ref) so the chip re-renders on each tick.
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  // Separate "background refresh in flight" indicator so the spinner
+  // never replaces existing rows during auto-poll. First fetch sets
+  // `kind=loading` (full spinner); subsequent fetches keep `kind=data`
+  // and only flip this flag to show a subtle "REFRESHING" hint.
+  const [refreshing, setRefreshing] = useState(false);
+  const initialFetchDoneRef = useRef(false);
 
-  // Fetch once per mount (or on retry / symbol change). AbortController
-  // cancels any in-flight call so a quick close-then-reopen on a new
-  // symbol doesn't overwrite the new result with the stale one.
+  // Tick counter for re-rendering the "UPDATED N AGO" chip every second
+  // without forcing a refetch. Cheap — only kicks when the modal is open.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(n => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Symbol/retry/baseUrl: full re-load (show spinner). pollTick: silent
+  // refresh (keep current rows visible). The single effect handles both
+  // by branching on initialFetchDoneRef + pollTick deltas to set
+  // refreshing-vs-loading correctly. AbortController cancels in-flight
+  // calls so a fast close-then-reopen on a different symbol doesn't
+  // overwrite fresh state with stale.
   useEffect(() => {
     const ctrl = new AbortController();
-    setState({ kind: 'loading' });
     let mounted = true;
+
+    const isSilent = initialFetchDoneRef.current && pollTick > 0;
+    if (!isSilent) {
+      setState({ kind: 'loading' });
+    } else {
+      setRefreshing(true);
+    }
 
     (async () => {
       const result: ApiResult<AuditRecentDTO> = await fetchRecentAudit(symbol, {
@@ -89,7 +124,12 @@ function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerPro
       if (!mounted) return;
       if (result.ok) {
         setState({ kind: 'data', data: result.data });
-      } else {
+        setLastUpdatedAt(Date.now());
+      } else if (!isSilent) {
+        // Only surface error state for initial / retry / symbol-change
+        // fetches. A silent-poll failure (network blip mid-session) keeps
+        // the last good frame and lets the next poll re-try — flipping
+        // the whole modal to red on every transient is jarring.
         setState({
           kind:   'error',
           title:  result.problem.title,
@@ -97,13 +137,33 @@ function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerPro
                   ?? `HTTP ${result.problem.status}`,
         });
       }
+      initialFetchDoneRef.current = true;
+      setRefreshing(false);
     })();
 
     return () => {
       mounted = false;
       ctrl.abort();
     };
-  }, [symbol, retryToken, baseUrl]);
+  }, [symbol, retryToken, baseUrl, pollTick]);
+
+  // Auto-refresh timer. Runs only while toggle is ON AND data is loaded
+  // (don't poll on top of an in-progress initial load or sticky error —
+  // the user can hit Retry to break out). 3s cadence matches the
+  // coordinator's emit rate so the modal lags by no more than one decision.
+  useEffect(() => {
+    if (!autoRefresh) return;
+    if (state.kind !== 'data') return;
+    const id = setInterval(() => setPollTick(n => n + 1), AUTO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [autoRefresh, state.kind]);
+
+  // Reset the initial-fetch flag when the symbol changes so the new
+  // symbol gets its own full-loading spinner (not a silent refresh).
+  useEffect(() => {
+    initialFetchDoneRef.current = false;
+    setLastUpdatedAt(null);
+  }, [symbol]);
 
   // ESC closes — capture phase so we beat anything else that listens.
   useEffect(() => {
@@ -119,6 +179,11 @@ function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerPro
   }, [onClose]);
 
   const handleRetry = useCallback(() => setRetryToken(n => n + 1), []);
+  const handleToggleAuto = useCallback(() => setAutoRefresh(v => !v), []);
+
+  const updatedAgoText = lastUpdatedAt !== null
+    ? formatAgo(Date.now() - lastUpdatedAt)
+    : null;
 
   return (
     <div
@@ -142,17 +207,42 @@ function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerPro
               SYMBOL · {symbol} · {state.kind === 'data'
                 ? `${state.data.rows.length} ROW${state.data.rows.length === 1 ? '' : 'S'}`
                 : 'PENDING'}
+              {updatedAgoText && (
+                <>
+                  <span style={SEP}>·</span>
+                  UPDATED {updatedAgoText}
+                  {refreshing && <span style={REFRESH_DOT} aria-hidden> ●</span>}
+                </>
+              )}
             </div>
           </div>
-          <button
-            type="button"
-            data-testid="audit-modal-close"
-            onClick={onClose}
-            aria-label="Close audit"
-            style={CLOSE_BTN}
-          >
-            ×
-          </button>
+          <div style={HEADER_CONTROLS}>
+            <button
+              type="button"
+              data-testid="audit-modal-auto-toggle"
+              onClick={handleToggleAuto}
+              aria-pressed={autoRefresh}
+              title={autoRefresh
+                ? 'Pause auto-refresh (decisions still land in DB)'
+                : 'Resume auto-refresh (3s polling)'}
+              style={{
+                ...AUTO_BTN,
+                color:       autoRefresh ? '#DEFF9A' : '#8A93A8',
+                borderColor: autoRefresh ? '#DEFF9A' : 'rgba(0, 191, 255, 0.30)',
+              }}
+            >
+              {autoRefresh ? '◉ LIVE' : '◯ PAUSED'}
+            </button>
+            <button
+              type="button"
+              data-testid="audit-modal-close"
+              onClick={onClose}
+              aria-label="Close audit"
+              style={CLOSE_BTN}
+            >
+              ×
+            </button>
+          </div>
         </header>
 
         <div style={BODY}>
@@ -173,7 +263,8 @@ function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerPro
         </div>
 
         <footer style={FOOTER}>
-          [ ESC OR CLICK OUTSIDE TO CLOSE · NEWEST-FIRST · MAX {ROW_LIMIT} ROWS ]
+          [ ESC OR CLICK OUTSIDE TO CLOSE · NEWEST-FIRST · MAX {ROW_LIMIT} ROWS
+          {autoRefresh ? ` · POLLING ${Math.round(AUTO_REFRESH_INTERVAL_MS / 1000)}s` : ' · PAUSED'} ]
         </footer>
       </div>
     </div>
@@ -309,6 +400,20 @@ function AuditRowCard({ row }: { row: AuditRow }) {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
+function formatAgo(ms: number): string {
+  // Bound display to the realistic range: 0 → "just now", < 60s → "Ns ago",
+  // < 60min → "Nm ago", otherwise just "Nm ago" capped (operator should
+  // be alerted by then anyway). Older entries clip to the floor for
+  // readability — exact seconds beyond a minute aren't useful in this UI.
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 2)        return 'JUST NOW';
+  if (s < 60)       return `${s}s AGO`;
+  const m = Math.floor(s / 60);
+  if (m < 60)       return `${m}m AGO`;
+  const h = Math.floor(m / 60);
+  return `${h}h AGO`;
+}
+
 function formatTs(iso: string): string {
   // `2026-05-11T04:30:00+00:00` → `04:30:00 · 05/11`. Keeps the modal
   // tight; the date is shown small so the eye lands on the time first.
@@ -410,6 +515,34 @@ const CLOSE_BTN: React.CSSProperties = {
   fontFamily: FONT_MONO,
   borderRadius: 2,
   lineHeight: '20px',
+};
+
+const HEADER_CONTROLS: React.CSSProperties = {
+  display:    'flex',
+  alignItems: 'center',
+  gap:        8,
+};
+
+const AUTO_BTN: React.CSSProperties = {
+  background:    'transparent',
+  border:        '0.8px solid',
+  padding:       '2px 8px',
+  fontSize:      9,
+  letterSpacing: '0.10em',
+  textTransform: 'uppercase',
+  fontFamily:    FONT_MONO,
+  cursor:        'pointer',
+  borderRadius:  2,
+  height:        24,
+  lineHeight:    '18px',
+  // color + borderColor set inline per autoRefresh state
+};
+
+const REFRESH_DOT: React.CSSProperties = {
+  color:         '#DEFF9A',
+  marginLeft:    6,
+  // Inherits the SUBTITLE text styling; the dot is intentionally small +
+  // ephemeral (only visible during the ~50ms fetch round-trip).
 };
 
 const BODY: React.CSSProperties = {
