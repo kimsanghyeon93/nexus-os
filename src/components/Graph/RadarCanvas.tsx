@@ -825,19 +825,98 @@ function RadarCanvasInner({
         ctx.globalCompositeOperation = 'source-over';
       }
 
-      // Labels
+      // Labels — bbox-based collision avoidance (Sprint 5q+).
+      //
+      // Candidate set is bounded: only hubs (10) + at most 2 of
+      // {selectedId, hoverId}, so worst-case ~12 labels. O(N²) overlap
+      // check is ≤ 144 cheap ops per frame at 60Hz = trivial vs the
+      // rest of the draw pipeline.
+      //
+      // Each candidate is offered four anchor positions in priority
+      // order: BELOW the node (default — matches the prior layout),
+      // ABOVE, RIGHT, LEFT. We accept the first slot whose bbox
+      // doesn't overlap a previously-placed bbox. If all four fail,
+      // the label is dropped — operator can still hover the node for
+      // the inspector readout, so a missing label is a smaller UX hit
+      // than two labels stacked on top of each other.
+      //
+      // Selected / hover labels are drawn FIRST (highest priority) so
+      // a hub label can never displace the one the operator is
+      // actively pointing at.
       ctx.font = '500 9px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
+
+      type LabelCandidate = {
+        node:    SimNode;
+        text:    string;
+        radius:  number;
+        dim:     number;
+        bright:  boolean;    // selected/hover → bone, else ash
+        prio:    number;     // lower draws first; wins exclusions
+      };
+      const candidates: LabelCandidate[] = [];
       for (const n of sim.nodes) {
-        const showLabel = n.isHub || n.id === selectedId || n.id === hoverId;
-        if (!showLabel) continue;
-        const r = radiusOf(n.ref);
-        const dim = entityDim(n.id);
-        ctx.globalAlpha = dim;
-        ctx.fillStyle = (n.id === selectedId || n.id === hoverId) ? COLOR.bone : COLOR.ash;
-        const label = n.isHub ? n.ref.label.toUpperCase() : n.id;
-        ctx.fillText(label, n.x, n.y + r + 6);
+        const isSel = n.id === selectedId;
+        const isHov = n.id === hoverId;
+        if (!(n.isHub || isSel || isHov)) continue;
+        candidates.push({
+          node:   n,
+          text:   n.isHub ? n.ref.label.toUpperCase() : n.id,
+          radius: radiusOf(n.ref),
+          dim:    entityDim(n.id),
+          bright: isSel || isHov,
+          // Priority: selected (0) < hover (1) < hub-with-anomaly (2)
+          // < normal hub (3). Lower number = drawn first.
+          prio:   isSel ? 0 : isHov ? 1 : (n.ref.anomaly > 0.7 ? 2 : 3),
+        });
+      }
+      candidates.sort((a, b) => a.prio - b.prio);
+
+      // ~9px font → height ≈ 11px with descent; 1.5px pad on each axis
+      // keeps adjacent labels from touching while staying tight enough
+      // for dense clusters to keep multiple labels visible.
+      const LABEL_H = 11;
+      const PAD_X   = 2;
+      const PAD_Y   = 2;
+      type Bbox = readonly [number, number, number, number];
+      const placed: Bbox[] = [];
+      const boxesOverlap = (a: Bbox, b: Bbox): boolean =>
+        !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
+
+      for (const c of candidates) {
+        const { node: n, text, radius: r, dim, bright } = c;
+        const w = ctx.measureText(text).width;
+        // Four anchor offsets relative to node center: BELOW, ABOVE,
+        // RIGHT, LEFT. dx/dy are the label's TOP-CENTER position
+        // (textBaseline = 'top', textAlign = 'center').
+        const offsets: ReadonlyArray<readonly [number, number]> = [
+          [0,         r + 6],                        // below
+          [0,         -r - 6 - LABEL_H],             // above
+          [r + 6 + w / 2,  -LABEL_H / 2],            // right
+          [-r - 6 - w / 2, -LABEL_H / 2],            // left
+        ];
+        let drawn = false;
+        for (const [dx, dy] of offsets) {
+          const cx = n.x + dx;
+          const cy = n.y + dy;
+          const box: Bbox = [
+            cx - w / 2 - PAD_X,
+            cy - PAD_Y,
+            cx + w / 2 + PAD_X,
+            cy + LABEL_H + PAD_Y,
+          ];
+          if (placed.some(b => boxesOverlap(box, b))) continue;
+          placed.push(box);
+          ctx.globalAlpha = dim;
+          ctx.fillStyle = bright ? COLOR.bone : COLOR.ash;
+          ctx.fillText(text, cx, cy);
+          drawn = true;
+          break;
+        }
+        // No fit → drop label this frame; the cluster legend in the
+        // bottom HUD still names this node, and hover reveals its id.
+        void drawn;
       }
       ctx.globalAlpha = 1;
 
