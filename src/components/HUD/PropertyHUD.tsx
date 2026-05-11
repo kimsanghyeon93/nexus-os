@@ -535,7 +535,10 @@ interface PriceSparklineProps {
   tone:  'cyan' | 'lime' | 'amber' | 'purple';
 }
 
-function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProps) {
+// Exported so unit tests can render in isolation without mocking the
+// /v1/ticks/recent fetch through useRecentTicks. Production rendering
+// still goes through the EntityCard branch which uses the hook.
+export function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProps) {
   // Layout: price line occupies the top PRICE_H pixels; a 2px gutter
   // separates it from the volume bars in the bottom VOL_H pixels.
   // Operators reading the chart pick "price" from the smooth line and
