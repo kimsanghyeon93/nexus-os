@@ -19,6 +19,7 @@ import App from '../App';
 import { MockStreamer } from './MockStreamer';
 import { MomentumStreamer } from '../adapters/MomentumStreamer';
 import { HanTooStreamer } from '../adapters/HanTooStreamer';
+import { HybridStreamer } from '../adapters/HybridStreamer';
 import { BackendStreamer } from '../services/BackendStreamer';
 import { loadSourcePref, saveSourcePref } from '../utils/persistence';
 import type { IMarketStreamer } from '../types/streamer';
@@ -32,7 +33,7 @@ const DEFAULT_SHOCK_TARGET = 'KRX_SEMI';
  *  new source requires updating this single tuple — TS keeps everything else
  *  in lockstep, and `loadSourcePref` will reject any stale localStorage value
  *  that's not in the current allowlist. */
-const SOURCES = ['synthetic', 'momentum-mock', 'momentum-live', 'hantoo-stub', 'backend-live'] as const;
+const SOURCES = ['synthetic', 'momentum-mock', 'momentum-live', 'hantoo-stub', 'backend-live', 'global-live'] as const;
 type Source = typeof SOURCES[number];
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -41,6 +42,12 @@ const SOURCE_LABEL: Record<Source, string> = {
   'momentum-live':  'MOMENTUM · LIVE',
   'hantoo-stub':    'HANTOO · STUB',
   'backend-live':   'BACKEND · LIVE',
+  // Sprint 5r: composite that runs BackendStreamer (KRX via nexus-backend)
+  // alongside MomentumStreamer 'live' (US via Alpha Vantage proxy). Single
+  // selection drives both pipes; canvas + audit modal + KisLiveSnapshot
+  // continue to see KRX flow while the MOMENTUM cluster gets real US
+  // intraday moves on top of the same surface.
+  'global-live':    'GLOBAL · LIVE  ▴KRX+US',
 };
 
 function makeStreamer(source: Source): IMarketStreamer {
@@ -50,6 +57,10 @@ function makeStreamer(source: Source): IMarketStreamer {
     case 'momentum-live': return new MomentumStreamer({ source: 'live' });
     case 'hantoo-stub':   return new HanTooStreamer({ stubMode: true });
     case 'backend-live':  return new BackendStreamer();
+    case 'global-live':   return new HybridStreamer(
+                            new BackendStreamer(),
+                            new MomentumStreamer({ source: 'live' }),
+                          );
   }
 }
 
