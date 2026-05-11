@@ -103,6 +103,10 @@ function EntityCard({ entity, transactions, onSelect, delta }: EntityCardProps) 
         ? <PriceSparkline ticks={priceTicks} tone={tone} />
         : <Sparkline values={anomalyHistory} tone={tone} />}
 
+      {/* Sprint 5p-I — Signal confidence trajectory. Renders only when
+       *  there's audit history for the entity (KIS-traded subset). */}
+      <SignalSparkline symbol={entity.id} />
+
       {isDiff ? (
         <div className="nx-prop__metrics nx-prop__metrics--diff">
           <Metric
@@ -689,4 +693,108 @@ function formatPrice(p: number): string {
   if (p >= 1000) return p.toLocaleString('en-US', { maximumFractionDigits: 0 });
   if (p >= 1)    return p.toLocaleString('en-US', { maximumFractionDigits: 2 });
   return p.toFixed(4);
+}
+
+/* ------------------------------------------------------------------ */
+/*  SignalSparkline — Sprint 5p-I, coordinator confidence history     */
+/* ------------------------------------------------------------------ */
+//  Pulls /v1/audit/recent and renders the last N rows' signal_confidence
+//  as a thin bar chart, oldest → newest left-to-right. Bar color by
+//  signal_action (lime BUY / amber SELL / cyan HOLD). Operator picks up
+//  conviction history at a glance: a flat low row = "agents bored",
+//  rising lime cluster = "BUY pressure building", amber spike at the
+//  end = "fresh SELL signal that the guardrail just shaped to HOLD".
+//
+//  Auto-hides on entities with no audit history (matches RecentDecisions
+//  panel's silent disappearance for synthetic non-KIS entities). The
+//  0.3 dashed reference line marks the coordinator's HOLD/EXECUTE cutoff.
+
+const SIGNAL_LIMIT       = 40;
+const SIGNAL_POLL_INTERVAL = 5000;
+
+function SignalSparkline({ symbol }: { symbol: string }) {
+  const [rows, setRows] = useState<AuditRow[] | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let ctrl: AbortController | null = null;
+
+    const pull = async () => {
+      ctrl?.abort();
+      ctrl = new AbortController();
+      const result = await fetchRecentAudit(symbol, {
+        limit:  SIGNAL_LIMIT,
+        signal: ctrl.signal,
+      });
+      if (!mounted) return;
+      if (result.ok) setRows(result.data.rows);
+    };
+
+    setRows(null);
+    pull();
+    const id = setInterval(pull, SIGNAL_POLL_INTERVAL);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+      ctrl?.abort();
+    };
+  }, [symbol]);
+
+  if (!rows || rows.length === 0) return null;
+
+  // API is newest-first; render oldest → newest so the eye scans
+  // left-to-right matching reading direction + the price sparkline.
+  const ordered = [...rows].reverse();
+  const W = 240;
+  const H = 24;
+  const slice = ordered.length > 1 ? W / (ordered.length - 1) : W;
+  const barW  = Math.max(1, slice - 0.4);
+
+  return (
+    <div className="nx-prop__spark" data-testid="signal-sparkline">
+      <div className="nx-prop__spark-head">
+        <span className="nx-label">SIGNAL · {ordered.length} DECISIONS</span>
+        <span className="nx-mono-dim" style={{ fontSize: 9 }}>
+          CONF 0-100%
+        </span>
+      </div>
+      <svg
+        width="100%"
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        style={{ display: 'block' }}
+      >
+        {ordered.map((r, i) => {
+          const x = i * slice;
+          const h = Math.max(0.5, r.signal_confidence * H);
+          const y = H - h;
+          const fill = r.signal_action === 'buy'  ? '#DEFF9A'
+                      : r.signal_action === 'sell' ? '#FFB200'
+                      :                              '#00BFFF';
+          return (
+            <rect
+              key={`s-${i}`}
+              x={x}
+              y={y}
+              width={barW}
+              height={h}
+              fill={fill}
+              opacity={0.75}
+            />
+          );
+        })}
+        {/* 0.3 threshold reference — coordinator's HOLD/EXECUTE cutoff */}
+        <line
+          x1={0}
+          y1={H - 0.3 * H}
+          x2={W}
+          y2={H - 0.3 * H}
+          stroke="rgba(138, 147, 168, 0.40)"
+          strokeWidth={0.5}
+          strokeDasharray="2 3"
+        />
+      </svg>
+    </div>
+  );
 }

@@ -15,6 +15,7 @@ import { BootSequenceOverlay } from './components/HUD/BootSequenceOverlay';
 import { AuditModal } from './components/HUD/AuditModal';
 import { KisLiveSnapshot } from './components/HUD/KisLiveSnapshot';
 import { TapePanel } from './components/HUD/TapePanel';
+import { VolumeHistogram } from './components/HUD/VolumeHistogram';
 import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
 import { summarizeDiff, type DiffFilter } from './utils/diff';
@@ -605,6 +606,12 @@ export default function App({
                 diffMap={diffMap}
               />
               <KisLiveSnapshot
+                symbols={kisSymbols}
+                entityMap={entityMap}
+                onSelect={setSelectedId}
+                selectedId={selectedId}
+              />
+              <VolumeHistogram
                 symbols={kisSymbols}
                 entityMap={entityMap}
                 onSelect={setSelectedId}

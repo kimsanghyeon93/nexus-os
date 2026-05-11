@@ -180,6 +180,18 @@ export interface MarketTickTapeDTO {
   entries: MarketTickTapeEntry[];
 }
 
+/** Sprint 5p-H — relative volume bar entry. */
+export interface MarketVolumeBucket {
+  symbol:       string;
+  total_volume: number;
+  tick_count:   number;
+}
+
+export interface MarketVolumeWindowDTO {
+  window_minutes: number;
+  buckets:        MarketVolumeBucket[];
+}
+
 // ──────────────────────────────────────────────────────────────────────
 //  ApiResult — discriminated union the wrapper returns
 // ──────────────────────────────────────────────────────────────────────
