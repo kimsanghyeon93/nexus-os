@@ -9,22 +9,17 @@
 // Persistence is the parent's job; we just call onDismiss() when the operator
 // acknowledges, so the tour can also be re-shown on demand later.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLanguage } from '../../utils/i18n';
 
 interface BootSequenceOverlayProps {
   onDismiss: () => void;
 }
 
-/** The briefing copy. Edit here to add lines — typewriter handles arbitrary
- *  length. Empty strings render as blank visual breaks. */
-const BRIEFING_LINES: ReadonlyArray<string> = [
-  '[ SYSTEM BOOT COMPLETED ]',
-  '',
-  '> PRESS [ ⌘S ] TO CAPTURE STATE',
-  '> DROP .json TO ENTER TIME-MACHINE REPLAY',
-  '> HOLD [ SHIFT ] + DROP FOR DELTA DIFF',
-  '> PRESS [ ⌘\\ ] FOR DEEP FOCUS MODE',
-  '> PRESS [ ? ] OR [ ⌘/ ] TO REOPEN THIS BRIEFING',
+/** Briefing line keys — i18n values come from `boot.l0` … `boot.l5` so a
+ *  language flip mid-boot replays the typewriter in the new tongue. */
+const BRIEFING_KEYS: ReadonlyArray<string> = [
+  'boot.l0', '', 'boot.l1', 'boot.l2', 'boot.l3', 'boot.l4', 'boot.l5',
 ];
 
 /** Typewriter timing. Tuned for legibility — slow enough to feel ceremonial,
@@ -42,6 +37,15 @@ interface RevealState {
 }
 
 export function BootSequenceOverlay({ onDismiss }: BootSequenceOverlayProps) {
+  const { t, lang } = useLanguage();
+  // Translate the briefing once per render; the typewriter reveal reads
+  // from this array. Memoized so the reveal effect dep on it stays stable
+  // unless the language flips.
+  const BRIEFING_LINES = useMemo<ReadonlyArray<string>>(
+    () => BRIEFING_KEYS.map(k => (k === '' ? '' : t(k))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lang],
+  );
   const [reveal, setReveal] = useState<RevealState>({ line: 0, col: 0 });
   const [fadingOut, setFadingOut] = useState(false);
 
@@ -80,7 +84,7 @@ export function BootSequenceOverlay({ onDismiss }: BootSequenceOverlayProps) {
       cancelled = true;
       window.clearTimeout(initial);
     };
-  }, [fadingOut]);
+  }, [fadingOut, BRIEFING_LINES]);
 
   // Ack handler — ESC starts the fade, fade end calls onDismiss.
   // Wrapped in a ref-stable callback so the keydown listener doesn't churn.

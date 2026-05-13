@@ -11,6 +11,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchTickTape } from '../../services/marketApi';
+import { NEXUS_COLOR, withAlpha } from '../../styles/colors';
+import { FONT_MONO } from '../../styles/fonts';
+import { useLanguage } from '../../utils/i18n';
 import type { MarketTickTapeEntry } from '../../types/api';
 
 const POLL_INTERVAL_MS = 1000;
@@ -28,6 +31,7 @@ interface TapeState {
 }
 
 export function TapePanel({ symbols, onSelect }: TapePanelProps) {
+  const { t } = useLanguage();
   const [state, setState] = useState<TapeState>({ entries: [], receivedAt: 0 });
   const [paused, setPaused] = useState(false);
   // pausedAtRef captures the frame the operator wants to inspect — when
@@ -102,7 +106,7 @@ export function TapePanel({ symbols, onSelect }: TapePanelProps) {
           <span
             className={'nx-dot ' + (paused ? 'nx-dot--amber' : 'nx-dot--cyan nx-dot--pulse')}
           />
-          <span>TAPE · {paused ? 'PAUSED' : 'LIVE'}</span>
+          <span>{t(paused ? 'hud.tape.paused' : 'hud.tape.live')}</span>
         </div>
         <button
           type="button"
@@ -110,15 +114,15 @@ export function TapePanel({ symbols, onSelect }: TapePanelProps) {
           onClick={togglePause}
           aria-pressed={paused}
           style={pauseBtnStyle(paused)}
-          title={paused ? 'Resume tape (1s polling)' : 'Pause tape (DB still records)'}
+          title={t(paused ? 'hud.tape.titleResume' : 'hud.tape.titlePause')}
         >
-          {paused ? '▶ RESUME' : '❚❚ PAUSE'}
+          {t(paused ? 'hud.tape.resume' : 'hud.tape.pause')}
         </button>
       </header>
 
       <div style={VIEWPORT}>
         {displayed.length === 0 && (
-          <div style={EMPTY_HINT}>— no ticks recorded yet —</div>
+          <div style={EMPTY_HINT}>{t('hud.tape.empty')}</div>
         )}
         {displayed.length > 0 && (
           <ul style={LIST}>
@@ -175,12 +179,12 @@ function rowStyle(side: 'buy' | 'sell'): React.CSSProperties {
     alignItems:    'center',
     gap:           8,
     padding:       '2px 8px',
-    fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+    fontFamily:    FONT_MONO,
     fontSize:      9,
     cursor:        'pointer',
     background:    side === 'buy'
-                    ? 'rgba(222, 255, 154, 0.02)'
-                    : 'rgba(255, 178, 0, 0.02)',
+                    ? withAlpha(NEXUS_COLOR.lime, 0.02)
+                    : withAlpha(NEXUS_COLOR.amber, 0.02),
   };
 }
 
@@ -195,13 +199,13 @@ function pauseBtnStyle(paused: boolean): React.CSSProperties {
   return {
     background:    'transparent',
     border:        '0.8px solid',
-    borderColor:   paused ? '#FFB200' : 'rgba(0, 191, 255, 0.30)',
-    color:         paused ? '#FFB200' : '#00BFFF',
+    borderColor:   paused ? NEXUS_COLOR.amber : withAlpha(NEXUS_COLOR.cyan, 0.30),
+    color:         paused ? NEXUS_COLOR.amber : NEXUS_COLOR.cyan,
     padding:       '2px 8px',
     fontSize:      9,
     letterSpacing: '0.08em',
     textTransform: 'uppercase',
-    fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+    fontFamily:    FONT_MONO,
     cursor:        'pointer',
     borderRadius:  2,
   };
@@ -216,7 +220,7 @@ const VIEWPORT: React.CSSProperties = {
   maxHeight:      ROWS_VISIBLE * 16,
   overflowY:      'auto',
   scrollbarWidth: 'thin',
-  scrollbarColor: 'rgba(0, 191, 255, 0.35) transparent',
+  scrollbarColor: `${withAlpha(NEXUS_COLOR.cyan, 0.35)} transparent`,
   padding:        '4px 0 8px',
 };
 
@@ -256,7 +260,7 @@ const EMPTY_HINT: React.CSSProperties = {
   textAlign:     'center',
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
-  fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+  fontFamily:    FONT_MONO,
 };
 
 // Scoped scrollbar styling — same approach as AuditModal, ::-webkit
@@ -268,8 +272,8 @@ if (typeof document !== 'undefined' && !document.getElementById('nx-tape-scroll-
   style.textContent = `
     [data-testid="tape-panel"] ::-webkit-scrollbar { width: 6px; }
     [data-testid="tape-panel"] ::-webkit-scrollbar-track { background: transparent; }
-    [data-testid="tape-panel"] ::-webkit-scrollbar-thumb { background: rgba(0, 191, 255, 0.28); border-radius: 3px; }
-    [data-testid="tape-panel"] ::-webkit-scrollbar-thumb:hover { background: rgba(0, 191, 255, 0.55); }
+    [data-testid="tape-panel"] ::-webkit-scrollbar-thumb { background: ${withAlpha(NEXUS_COLOR.cyan, 0.28)}; border-radius: 3px; }
+    [data-testid="tape-panel"] ::-webkit-scrollbar-thumb:hover { background: ${withAlpha(NEXUS_COLOR.cyan, 0.55)}; }
   `;
   document.head.appendChild(style);
 }

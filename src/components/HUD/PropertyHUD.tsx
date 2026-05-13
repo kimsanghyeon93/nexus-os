@@ -8,6 +8,9 @@ import type { NexusEdge, NexusEntity } from '../../types/nexus';
 import type { EntityDelta } from '../../utils/diff';
 import { fetchRecentAudit } from '../../services/auditApi';
 import { fetchRecentTicks } from '../../services/marketApi';
+import { NEXUS_COLOR, withAlpha } from '../../styles/colors';
+import { FONT_MONO } from '../../styles/fonts';
+import { useLanguage } from '../../utils/i18n';
 import type { AuditRow, MarketTick } from '../../types/api';
 
 export interface PropertyHUDProps {
@@ -20,12 +23,13 @@ export interface PropertyHUDProps {
 }
 
 export function PropertyHUD({ entity, transactions, onSelect, diffMap }: PropertyHUDProps) {
+  const { t } = useLanguage();
   return (
     <aside className="nx-panel nx-prop" aria-label="Property HUD">
       <header className="nx-panel__head">
         <div className="nx-panel__title">
           <span className="nx-dot nx-dot--purple nx-dot--pulse" />
-          <span>PROPERTIES</span>
+          <span>{t('hud.prop.title')}</span>
         </div>
         <span className="nx-panel__chev">▸</span>
       </header>
@@ -42,7 +46,7 @@ export function PropertyHUD({ entity, transactions, onSelect, diffMap }: Propert
       )}
 
       <footer className="nx-panel__foot nx-mono-dim" style={{ fontSize: 9 }}>
-        AI · DERIVED · CONFIDENCE 94%
+        {t('hud.prop.aiBadge', { pct: 94 })}
       </footer>
     </aside>
   );
@@ -172,7 +176,12 @@ interface RecentDecisionsProps {
 }
 
 const RECENT_LIMIT          = 3;
-const RECENT_POLL_INTERVAL  = 5000;
+// Sprint 5s+ loop iter 9 Track B: poll interval shared between
+// RecentDecisions and SignalSparkline — both consume /v1/audit/recent
+// for the same selected entity, so they MUST stay in lockstep
+// (a refresh in one without the other would show stale signal data
+// next to fresh decision rows). Single constant guarantees that.
+const AUDIT_POLL_INTERVAL_MS = 5000;
 
 function RecentDecisions({ symbol }: RecentDecisionsProps) {
   const [rows, setRows] = useState<AuditRow[] | null>(null);
@@ -197,7 +206,7 @@ function RecentDecisions({ symbol }: RecentDecisionsProps) {
     // before the new fetch resolves.
     setRows(null);
     pull();
-    const id = setInterval(pull, RECENT_POLL_INTERVAL);
+    const id = setInterval(pull, AUDIT_POLL_INTERVAL_MS);
     return () => {
       mounted = false;
       clearInterval(id);
@@ -246,7 +255,7 @@ function miniRowStyle(_r: AuditRow): React.CSSProperties {
     alignItems: 'center',
     gap:        8,
     padding:    '3px 0',
-    fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+    fontFamily: FONT_MONO,
   };
 }
 
@@ -393,6 +402,7 @@ interface SparklineProps {
 }
 
 function Sparkline({ values, tone }: SparklineProps) {
+  const { t } = useLanguage();
   const W = 240;
   const H = 36;
   const stroke = TONE_TO_STROKE[tone];
@@ -400,7 +410,7 @@ function Sparkline({ values, tone }: SparklineProps) {
   if (values.length < 2) {
     return (
       <div className="nx-prop__spark">
-        <div className="nx-label">ANOMALY · LIVE</div>
+        <div className="nx-label">{t('hud.prop.anomalyLive')}</div>
         <div className="nx-prop__spark-empty">— acquiring signal —</div>
       </div>
     );
@@ -424,7 +434,7 @@ function Sparkline({ values, tone }: SparklineProps) {
   return (
     <div className="nx-prop__spark">
       <div className="nx-prop__spark-head">
-        <span className="nx-label">ANOMALY · LIVE</span>
+        <span className="nx-label">{t('hud.prop.anomalyLive')}</span>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
           {SPARK_BUFFER * SPARK_INTERVAL_MS / 1000}s window
         </span>
@@ -543,6 +553,7 @@ interface PriceSparklineProps {
 // /v1/ticks/recent fetch through useRecentTicks. Production rendering
 // still goes through the EntityCard branch which uses the hook.
 export function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProps) {
+  const { t } = useLanguage();
   // Layout: price line occupies the top PRICE_H pixels; a 2px gutter
   // separates it from the volume bars in the bottom VOL_H pixels.
   // Operators reading the chart pick "price" from the smooth line and
@@ -575,8 +586,8 @@ export function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProp
   if (!stats || ticks.length < 2) {
     return (
       <div className="nx-prop__spark">
-        <div className="nx-label">PRICE · LIVE</div>
-        <div className="nx-prop__spark-empty">— acquiring tape —</div>
+        <div className="nx-label">{t('hud.prop.priceLive')}</div>
+        <div className="nx-prop__spark-empty">{t('hud.prop.acquiringTape')}</div>
       </div>
     );
   }
@@ -609,7 +620,7 @@ export function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProp
   return (
     <div className="nx-prop__spark" data-testid="price-sparkline">
       <div className="nx-prop__spark-head">
-        <span className="nx-label">PRICE · LIVE</span>
+        <span className="nx-label">{t('hud.prop.priceLive')}</span>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
           {ticks.length} ticks
         </span>
@@ -649,7 +660,7 @@ export function PriceSparkline({ ticks, tone: fallbackTone }: PriceSparklineProp
           y1={volBaseY}
           x2={W}
           y2={volBaseY}
-          stroke="rgba(138, 147, 168, 0.30)"
+          stroke={withAlpha(NEXUS_COLOR.ash, 0.30)}
           strokeWidth={0.5}
         />
 
@@ -710,9 +721,12 @@ function formatPrice(p: number): string {
 //  0.3 dashed reference line marks the coordinator's HOLD/EXECUTE cutoff.
 
 const SIGNAL_LIMIT       = 40;
-const SIGNAL_POLL_INTERVAL = 5000;
+// Reuses AUDIT_POLL_INTERVAL_MS — see comment at the RecentDecisions
+// declaration above. Both surfaces poll the same audit endpoint and
+// must refresh in lockstep.
 
 function SignalSparkline({ symbol }: { symbol: string }) {
+  const { t } = useLanguage();
   const [rows, setRows] = useState<AuditRow[] | null>(null);
 
   useEffect(() => {
@@ -732,7 +746,7 @@ function SignalSparkline({ symbol }: { symbol: string }) {
 
     setRows(null);
     pull();
-    const id = setInterval(pull, SIGNAL_POLL_INTERVAL);
+    const id = setInterval(pull, AUDIT_POLL_INTERVAL_MS);
     return () => {
       mounted = false;
       clearInterval(id);
@@ -753,7 +767,7 @@ function SignalSparkline({ symbol }: { symbol: string }) {
   return (
     <div className="nx-prop__spark" data-testid="signal-sparkline">
       <div className="nx-prop__spark-head">
-        <span className="nx-label">SIGNAL · {ordered.length} DECISIONS</span>
+        <span className="nx-label">{t('hud.prop.signal', { n: ordered.length })}</span>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
           CONF 0-100%
         </span>
@@ -790,7 +804,7 @@ function SignalSparkline({ symbol }: { symbol: string }) {
           y1={H - 0.3 * H}
           x2={W}
           y2={H - 0.3 * H}
-          stroke="rgba(138, 147, 168, 0.40)"
+          stroke={withAlpha(NEXUS_COLOR.ash, 0.40)}
           strokeWidth={0.5}
           strokeDasharray="2 3"
         />

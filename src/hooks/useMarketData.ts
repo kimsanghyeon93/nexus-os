@@ -43,28 +43,56 @@ type MemberSeed = Pick<
 > & { mark?: string; founded?: number | null };
 
 function buildDataset(): NexusDataset {
+  // Cluster centers in unit-square (0..1) coords. Sprint 5s+ respread:
+  // the original layout had MOMENTUM(0.62,0.40), COMM(0.50,0.55), EQ
+  // (0.78,0.28) within 0.18–0.20 of each other and KRX(0.92,0.45) ↔
+  // CRYPTO(0.82,0.62) at 0.20. With MOMENTUM holding 28 members and
+  // KRX 22, those clusters' member rings overlapped neighboring
+  // clusters' edge members — the "중구난방" overlap the operator caught.
+  // New layout: 4×3 grid biased to give the high-density clusters their
+  // own corners. All inter-cluster center distances ≥ 0.24.
   const CLUSTERS: ClusterDef[] = [
-    { id: 'CB',     label: 'CENTRAL BANKS',      cx: 0.20, cy: 0.22, color: 'cyan',   mark: 'doubleRing' },
-    { id: 'SOV',    label: 'SOVEREIGN BONDS',    cx: 0.50, cy: 0.18, color: 'cyan',   mark: 'diamond' },
-    { id: 'EQ',     label: 'US EQUITY SECTORS',  cx: 0.78, cy: 0.28, color: 'cyan',   mark: 'hexagon' },
-    { id: 'FX',     label: 'FX PAIRS',           cx: 0.18, cy: 0.55, color: 'purple', mark: 'star' },
-    { id: 'COMM',   label: 'COMMODITIES',        cx: 0.50, cy: 0.55, color: 'amber',  mark: 'triangle' },
-    { id: 'CRYPTO', label: 'DIGITAL ASSETS',     cx: 0.82, cy: 0.62, color: 'purple', mark: 'ringDot' },
-    { id: 'MACRO',  label: 'MACRO INDICATORS',   cx: 0.34, cy: 0.82, color: 'cyan',   mark: 'cross' },
-    { id: 'WATCH',  label: 'SANCTION / WATCH',   cx: 0.70, cy: 0.88, color: 'lime',   mark: 'hexagon', anomaly: true },
-    { id: 'KRX',    label: 'KRX · KOSPI SECTORS',cx: 0.92, cy: 0.45, color: 'purple', mark: 'hexagon' },
-    { id: 'MOMENTUM', label: 'MOMENTUM · US TICKERS', cx: 0.62, cy: 0.40, color: 'cyan', mark: 'hexagon' },
+    { id: 'CB',     label: 'CENTRAL BANKS',         cx: 0.12, cy: 0.20, color: 'cyan',   mark: 'doubleRing' },
+    { id: 'SOV',    label: 'SOVEREIGN BONDS',       cx: 0.37, cy: 0.16, color: 'cyan',   mark: 'diamond' },
+    { id: 'EQ',     label: 'US EQUITY SECTORS',     cx: 0.61, cy: 0.18, color: 'cyan',   mark: 'hexagon' },
+    { id: 'MOMENTUM', label: 'MOMENTUM · US TICKERS', cx: 0.87, cy: 0.22, color: 'cyan', mark: 'hexagon' },
+    { id: 'FX',     label: 'FX PAIRS',              cx: 0.13, cy: 0.50, color: 'purple', mark: 'star' },
+    { id: 'COMM',   label: 'COMMODITIES',           cx: 0.39, cy: 0.48, color: 'amber',  mark: 'triangle' },
+    { id: 'CRYPTO', label: 'DIGITAL ASSETS',        cx: 0.66, cy: 0.50, color: 'purple', mark: 'ringDot' },
+    { id: 'KRX',    label: 'KRX · KOSPI SECTORS',   cx: 0.90, cy: 0.56, color: 'purple', mark: 'hexagon' },
+    { id: 'MACRO',  label: 'MACRO INDICATORS',      cx: 0.28, cy: 0.84, color: 'cyan',   mark: 'cross' },
+    { id: 'WATCH',  label: 'SANCTION / WATCH',      cx: 0.66, cy: 0.85, color: 'lime',   mark: 'hexagon', anomaly: true },
   ];
 
   const ENTITIES: NexusEntity[] = [];
   const TX: NexusEdge[] = [];
 
+  // Sprint 5s+ correctness fix: looked-up by id, NOT array index. The
+  // earlier `placeMembers(CLUSTERS[3]!, ...)` style coupled member-to-
+  // cluster wiring to the CLUSTERS array's ORDER, so when the array
+  // was reordered (5s+ respread that moved MOMENTUM ↑ and KRX ↑), every
+  // placeMembers call below the moved entries silently assigned members
+  // to the wrong cluster (FX pairs landed in MOMENTUM, US tickers in
+  // WATCH, etc.). This helper anchors each call to a cluster ID so any
+  // future reorder is a no-op for member placement.
+  const C = (id: string): ClusterDef => {
+    const c = CLUSTERS.find(cc => cc.id === id);
+    if (!c) throw new Error(`[NEXUS] unknown cluster id: ${id}`);
+    return c;
+  };
+
   const placeMembers = (cluster: ClusterDef, members: MemberSeed[], seed: number) => {
     const r = rng(seed);
     const N = members.length;
+    // Member-ring radius scales with sqrt(N/7) so high-density clusters
+    // (MOMENTUM=28, KRX=22) don't cram their members onto the same
+    // ~0.08 ring that fits 7-member clusters comfortably. Capped at 1.7
+    // so even MOMENTUM's ring stays within ~0.19 of canvas width and
+    // doesn't bleed into neighboring clusters.
+    const densityFactor = Math.min(1.7, Math.max(1, Math.sqrt(N / 7)));
     members.forEach((m, i) => {
       const angle = (i / N) * Math.PI * 2 + r() * 0.4;
-      const radius = 0.06 + r() * 0.05;
+      const radius = (0.06 + r() * 0.05) * densityFactor;
       const x = cluster.cx + Math.cos(angle) * radius;
       const y = cluster.cy + Math.sin(angle) * radius * 0.65;
       ENTITIES.push({
@@ -95,7 +123,7 @@ function buildDataset(): NexusDataset {
     });
   });
 
-  placeMembers(CLUSTERS[0]!, [
+  placeMembers(C('CB'), [
     { id: 'FED',  label: 'US Federal Reserve',     type: 'central_bank', jurisdiction: 'US', founded: 1913, anomaly: 0.05, sanctioned: false, txVol: 8400 },
     { id: 'ECB',  label: 'European Central Bank',  type: 'central_bank', jurisdiction: 'EU', founded: 1998, anomaly: 0.07, sanctioned: false, txVol: 6100 },
     { id: 'BOJ',  label: 'Bank of Japan',          type: 'central_bank', jurisdiction: 'JP', founded: 1882, anomaly: 0.12, sanctioned: false, txVol: 3700 },
@@ -105,7 +133,7 @@ function buildDataset(): NexusDataset {
     { id: 'RBI',  label: 'Reserve Bank of India',  type: 'central_bank', jurisdiction: 'IN', founded: 1935, anomaly: 0.18, sanctioned: false, txVol: 1900 },
   ], 1);
 
-  placeMembers(CLUSTERS[1]!, [
+  placeMembers(C('SOV'), [
     { id: 'UST10', label: 'US 10Y Treasury',  type: 'bond', jurisdiction: 'US', anomaly: 0.22, sanctioned: false, txVol: 5800 },
     { id: 'UST2',  label: 'US 2Y Treasury',   type: 'bond', jurisdiction: 'US', anomaly: 0.41, sanctioned: false, txVol: 4200 },
     { id: 'BUND',  label: 'German Bund 10Y',  type: 'bond', jurisdiction: 'DE', anomaly: 0.14, sanctioned: false, txVol: 2900 },
@@ -115,7 +143,7 @@ function buildDataset(): NexusDataset {
     { id: 'OAT',   label: 'French OAT 10Y',   type: 'bond', jurisdiction: 'FR', anomaly: 0.24, sanctioned: false, txVol: 1100 },
   ], 2);
 
-  placeMembers(CLUSTERS[2]!, [
+  placeMembers(C('EQ'), [
     { id: 'XLK',  label: 'Tech Sector',         type: 'equity_sector', jurisdiction: 'US', anomaly: 0.31, sanctioned: false, txVol: 4400 },
     { id: 'XLF',  label: 'Financials Sector',   type: 'equity_sector', jurisdiction: 'US', anomaly: 0.27, sanctioned: false, txVol: 3700 },
     { id: 'XLE',  label: 'Energy Sector',       type: 'equity_sector', jurisdiction: 'US', anomaly: 0.62, sanctioned: false, txVol: 2900 },
@@ -127,7 +155,7 @@ function buildDataset(): NexusDataset {
     { id: 'SMH',  label: 'Semiconductors',      type: 'equity_sector', jurisdiction: 'US', anomaly: 0.78, sanctioned: false, txVol: 3300 },
   ], 3);
 
-  placeMembers(CLUSTERS[3]!, [
+  placeMembers(C('FX'), [
     { id: 'EURUSD', label: 'EUR / USD', type: 'fx', jurisdiction: '—', anomaly: 0.18, sanctioned: false, txVol: 5400 },
     { id: 'USDJPY', label: 'USD / JPY', type: 'fx', jurisdiction: '—', anomaly: 0.66, sanctioned: false, txVol: 4100 },
     { id: 'GBPUSD', label: 'GBP / USD', type: 'fx', jurisdiction: '—', anomaly: 0.22, sanctioned: false, txVol: 2300 },
@@ -137,7 +165,7 @@ function buildDataset(): NexusDataset {
     { id: 'USDTRY', label: 'USD / TRY', type: 'fx', jurisdiction: '—', anomaly: 0.92, sanctioned: false, txVol:  680 },
   ], 4);
 
-  placeMembers(CLUSTERS[4]!, [
+  placeMembers(C('COMM'), [
     { id: 'WTI',   label: 'WTI Crude',   type: 'commodity', jurisdiction: '—', anomaly: 0.69, sanctioned: false, txVol: 3100 },
     { id: 'BRT',   label: 'Brent Crude', type: 'commodity', jurisdiction: '—', anomaly: 0.61, sanctioned: false, txVol: 2700 },
     { id: 'XAU',   label: 'Gold',        type: 'commodity', jurisdiction: '—', anomaly: 0.34, sanctioned: false, txVol: 4800 },
@@ -147,7 +175,7 @@ function buildDataset(): NexusDataset {
     { id: 'WHEAT', label: 'Wheat',       type: 'commodity', jurisdiction: '—', anomaly: 0.46, sanctioned: false, txVol:  610 },
   ], 5);
 
-  placeMembers(CLUSTERS[5]!, [
+  placeMembers(C('CRYPTO'), [
     { id: 'BTC',      label: 'Bitcoin',         type: 'crypto',   jurisdiction: '—',  anomaly: 0.54, sanctioned: false, txVol: 4200 },
     { id: 'ETH',      label: 'Ether',           type: 'crypto',   jurisdiction: '—',  anomaly: 0.48, sanctioned: false, txVol: 3100 },
     { id: 'USDT',     label: 'Tether',          type: 'crypto',   jurisdiction: 'AE', anomaly: 0.71, sanctioned: false, txVol: 5800 },
@@ -157,7 +185,7 @@ function buildDataset(): NexusDataset {
     { id: 'CYGNUS',   label: 'Cygnus Exchange', type: 'exchange', jurisdiction: 'SG', anomaly: 0.21, sanctioned: false, txVol: 2240 },
   ], 6);
 
-  placeMembers(CLUSTERS[6]!, [
+  placeMembers(C('MACRO'), [
     { id: 'CPI_US',  label: 'US CPI YoY',          type: 'macro', jurisdiction: 'US', anomaly: 0.61, sanctioned: false, txVol: 3200 },
     { id: 'NFP',     label: 'Nonfarm Payrolls',    type: 'macro', jurisdiction: 'US', anomaly: 0.34, sanctioned: false, txVol: 2100 },
     { id: 'PMI_US',  label: 'US ISM PMI',          type: 'macro', jurisdiction: 'US', anomaly: 0.42, sanctioned: false, txVol: 1100 },
@@ -168,7 +196,7 @@ function buildDataset(): NexusDataset {
     { id: 'DXY',     label: 'DXY (USD Index)',     type: 'macro', jurisdiction: '—',  anomaly: 0.36, sanctioned: false, txVol: 3300 },
   ], 7);
 
-  placeMembers(CLUSTERS[7]!, [
+  placeMembers(C('WATCH'), [
     { id: 'BAKU_TR', label: 'Baku Transit LLC',  type: 'corporation', jurisdiction: 'AZ',  anomaly: 0.88, sanctioned: true,  txVol: 410 },
     { id: 'OBSIDIAN',label: 'Obsidian Holdings', type: 'holding',     jurisdiction: 'KY',  anomaly: 0.91, sanctioned: false, txVol: 980 },
     { id: 'NORDSEE', label: 'NordSee Treuhand',  type: 'bank',        jurisdiction: 'CH',  anomaly: 0.74, sanctioned: false, txVol: 1610 },
@@ -221,7 +249,7 @@ function buildDataset(): NexusDataset {
   });
 
   // KRX cluster — abstract sector aggregates (semantic grouping nodes)
-  placeMembers(CLUSTERS[8]!, [
+  placeMembers(C('KRX'), [
     { id: 'KRX_SEMI', label: 'KRX Semiconductors', type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.74, sanctioned: false, txVol: 3900 },
     { id: 'KRX_BATT', label: 'KRX Battery / EV',   type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.62, sanctioned: false, txVol: 2100 },
     { id: 'KRX_AUTO', label: 'KRX Automotive',     type: 'equity_sector', jurisdiction: 'KR', anomaly: 0.34, sanctioned: false, txVol: 1700 },
@@ -240,7 +268,7 @@ function buildDataset(): NexusDataset {
   // entityId, so the hook's `liveDataset.ENTITIES.find(e => e.id === m.entityId)`
   // resolves on first tick. Anomaly + cluster classification mirror dev.sql
   // so frontend-only render and DB snapshot agree at boot.
-  placeMembers(CLUSTERS[8]!, [
+  placeMembers(C('KRX'), [
     // TECH (semi + internet)
     { id: '005930', label: 'Samsung Electronics', type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.12, sanctioned: false, txVol: 8400 },
     { id: '000660', label: 'SK Hynix',            type: 'kr_equity', jurisdiction: 'KR', anomaly: 0.18, sanctioned: false, txVol: 3220 },
@@ -271,12 +299,16 @@ function buildDataset(): NexusDataset {
     // KOSPI index ties for the bellwethers
     ['005930','KOSPI',0.62], ['000660','KOSPI',0.51], ['005380','KOSPI',0.34],
   ];
+  // Sprint 5s+: stock → its sector hub gets the new 'sector' kind so
+  // RadarCanvas styles it distinctly (cluster-colored, higher alpha)
+  // — sector membership is the dominant relationship in the ontology
+  // and deserves visual priority over "random cross-cluster" lines.
   krxTickerLinks.forEach(([from, to, anomaly]) => {
     TX.push({
       from, to,
       usd: 500_000 + Math.random() * 30_000_000,
       n: 2 + ((Math.random() * 12) | 0),
-      anomaly, kind: 'cluster',
+      anomaly, kind: 'sector',
     });
   });
 
@@ -306,7 +338,7 @@ function buildDataset(): NexusDataset {
   // Mutated in real-time by MomentumStreamer instead of routing through sector
   // aggregations. Each ticker is connected to its primary US sector entity so
   // the cascading wave from a Momentum shock still reaches the broader graph.
-  placeMembers(CLUSTERS[9]!, [
+  placeMembers(C('MOMENTUM'), [
     { id: 'AAPL',  label: 'Apple Inc.',          type: 'us_equity', jurisdiction: 'US', anomaly: 0.18, sanctioned: false, txVol: 2800 },
     { id: 'MSFT',  label: 'Microsoft Corp.',     type: 'us_equity', jurisdiction: 'US', anomaly: 0.16, sanctioned: false, txVol: 2750 },
     { id: 'NVDA',  label: 'NVIDIA Corp.',        type: 'us_equity', jurisdiction: 'US', anomaly: 0.42, sanctioned: false, txVol: 1200 },
@@ -360,12 +392,21 @@ function buildDataset(): NexusDataset {
     // KRX cross-correlations — the ones already in the ontology
     ['NVDA','KRX_SEMI',0.71], ['AMD','KRX_SEMI',0.55],
   ];
+  // Sprint 5s+: distinguish "stock → its sector ETF" (sector kind) from
+  // "stock ↔ stock cross-correlation" (inter kind). The KRX_SEMI links
+  // for NVDA/AMD are cross-MARKET sector ties, still semantically
+  // sector-grade, so they get 'sector' too.
+  const SECTOR_HUBS = new Set([
+    'XLK','XLF','XLE','XLV','XLI','XLU','XLY','XLRE','SMH',
+    'KRX_SEMI','KRX_FIN','KRX_AUTO','KRX_BATT','KRX_BIO','KRX_SHIP',
+  ]);
   momentumLinks.forEach(([from, to, anomaly]) => {
     TX.push({
       from, to,
       usd: 800_000 + Math.random() * 40_000_000,
       n: 3 + ((Math.random() * 16) | 0),
-      anomaly, kind: 'inter',
+      anomaly,
+      kind: SECTOR_HUBS.has(to) ? 'sector' : 'inter',
     });
   });
 
@@ -406,7 +447,42 @@ function buildDataset(): NexusDataset {
     e.eigen  = +v[i]!.toFixed(4);
   });
 
-  return { ENTITIES, TX, CLUSTERS };
+  // ── Sprint 5s+ ontology cleanup (operator: "없는 종목은 삭제하거나 가상화폐 연결") ──
+  //
+  // Drop entities that had no real-data source AND no semantic crypto
+  // alias. Each removed id falls into one of:
+  //   • institutional, not tradable (central banks, BOK) — no Yahoo
+  //     ticker, FRED data is calendar-cadence (separate scope)
+  //   • macro indicators released on schedule (CPI/NFP/PMI/GDP/OIL_INV)
+  //     — wrong cadence for the per-tick wire format
+  //   • non-US sovereign yields (BUND/JGB/GILT/BTP/OAT, UST2, KTB10) —
+  //     not on Yahoo's chart endpoint
+  // The TORNADO/WALLET_X/CYGNUS/OBSIDIAN/BAKU_TR/NORDSEE/HELIX/SAFFRON/
+  // TIDE_FX entities chose the "connect to crypto" path — see backend
+  // EXTRA_YAHOO_SYMBOLS, no frontend change required.
+  //
+  // HUB_CB is removed because dropping its 7 members leaves the cluster
+  // hub orphaned; MACRO + SOV keep their hubs because VIX/DXY (MACRO)
+  // and UST10 (SOV) remain as live-data members.
+  const REMOVED_IDS = new Set<string>([
+    // Central banks (institutional, not tradable)
+    'FED', 'ECB', 'BOJ', 'BOE', 'PBOC', 'SNB', 'RBI', 'BOK',
+    // Calendar-cadence macro indicators
+    'CPI_US', 'NFP', 'PMI_US', 'GDP_US', 'CPI_EU', 'OIL_INV',
+    // Non-US sovereign yields + short-end Treasury (not on Yahoo chart)
+    'BUND', 'JGB', 'GILT', 'BTP', 'OAT', 'UST2', 'KTB10',
+    // CB cluster's hub becomes orphaned once its members are gone
+    'HUB_CB',
+  ]);
+  // CB cluster definition also goes — keeps the legend honest. MACRO
+  // and SOV cluster defs stay because they retain live-data members.
+  const REMOVED_CLUSTERS = new Set<string>(['CB']);
+
+  const filteredEntities = ENTITIES.filter(e => !REMOVED_IDS.has(e.id));
+  const filteredTX = TX.filter(t => !REMOVED_IDS.has(t.from) && !REMOVED_IDS.has(t.to));
+  const filteredClusters = CLUSTERS.filter(c => !REMOVED_CLUSTERS.has(c.id));
+
+  return { ENTITIES: filteredEntities, TX: filteredTX, CLUSTERS: filteredClusters };
 }
 
 /* ------------------------------------------------------------------ */
@@ -581,11 +657,42 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
     return () => clearInterval(id);
   }, [streamer, liveDataset, isReplaying]);
 
-  // SSO — static for now; in production read from `/auth/session`
-  const sso: SsoSession = useMemo(
-    () => ({ protocol: 'SAML 2.0', verified: true, expiresIn: '04:12:38' }),
-    [],
-  );
+  // SSO — Sprint 5s+ loop iteration: previously a 100%-static mock
+  // (`expiresIn: '04:12:38'` that never decremented). When real SSO
+  // lands this should pull from `/auth/session`; until then we keep
+  // the shape but drive `expiresIn` from a live countdown anchored at
+  // mount time, so the operator sees an honest "session winds down"
+  // value instead of a fixed string lying about token state.
+  //
+  // Initial duration comes from VITE_SSO_SESSION_MINUTES env (default
+  // 240 min = 4h). Verified flips to false when the countdown hits 0
+  // — TopBar's pill already renders 'INVALID' for !verified.
+  const ssoExpiresAtRef = useRef<number>(0);
+  if (ssoExpiresAtRef.current === 0) {
+    const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+    const minutes = Number(env?.['VITE_SSO_SESSION_MINUTES'] ?? '240');
+    const total = Number.isFinite(minutes) && minutes > 0 ? minutes : 240;
+    ssoExpiresAtRef.current = Date.now() + total * 60_000;
+  }
+  const [ssoTick, setSsoTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSsoTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const sso: SsoSession = useMemo(() => {
+    const remainingMs = Math.max(0, ssoExpiresAtRef.current - Date.now());
+    const s = Math.floor(remainingMs / 1000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return {
+      protocol: 'SAML 2.0',
+      verified: remainingMs > 0,
+      expiresIn: `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s / 60) % 60))}:${pad(s % 60)}`,
+    };
+    // ssoTick is the recompute trigger — without it useMemo would freeze
+    // expiresIn at mount. ssoExpiresAtRef is intentionally NOT a dep
+    // because we anchor it once at mount and never want a re-anchor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ssoTick]);
 
   // Sprint 5p-B: 1Hz sweep over the last-tick ledger to publish a fresh
   // liveEntityIds set whenever membership crosses the window boundary.

@@ -26,6 +26,9 @@
 import { useEffect, useState } from 'react';
 
 import { fetchDecisionRate, fetchBlockedReasons } from '../../services/metricsApi';
+import { NEXUS_COLOR, withAlpha } from '../../styles/colors';
+import { FONT_MONO } from '../../styles/fonts';
+import { useLanguage } from '../../utils/i18n';
 import type {
   BlockedReasonsDTO,
   DecisionBucket,
@@ -46,6 +49,7 @@ const STALLED_THRESHOLD_S = 90;
 const RENDER_TICK_MS      = 1000;     // re-render for "Ns AGO" chip without refetch
 
 export function SystemHealthPanel() {
+  const { t } = useLanguage();
   const [rate, setRate]       = useState<DecisionRateDTO | null>(null);
   const [blocked, setBlocked] = useState<BlockedReasonsDTO | null>(null);
   const [, setNowTick]        = useState(0);
@@ -118,30 +122,28 @@ export function SystemHealthPanel() {
                           'nx-dot--cyan'
             )}
           />
-          <span>SYSTEM · {
-            isStalled ? 'STALLED' : isAlive ? 'ALIVE' : 'PENDING'
-          }</span>
+          <span>{t(isStalled ? 'hud.health.stalled' : isAlive ? 'hud.health.alive' : 'hud.health.pending')}</span>
         </div>
-        <span style={agePill(isStalled)}>{formatAge(ageSec)}</span>
+        <span style={agePill(isStalled)}>{formatAge(ageSec, t)}</span>
       </header>
 
       <div style={STRIP}>
         <div style={CHIP_GROUP}>
-          <span style={CHIP_LABEL}>DEC/MIN</span>
+          <span style={CHIP_LABEL}>{t('hud.health.decMin')}</span>
           <span style={CHIP_VALUE_LIME}>{lastBucket?.n_total ?? '—'}</span>
         </div>
         <div style={CHIP_GROUP}>
-          <span style={CHIP_LABEL}>NOOP</span>
+          <span style={CHIP_LABEL}>{t('hud.health.noop')}</span>
           <span style={CHIP_VALUE}>{lastBucket?.n_noop ?? 0}</span>
         </div>
         <div style={CHIP_GROUP}>
-          <span style={CHIP_LABEL}>BLK</span>
+          <span style={CHIP_LABEL}>{t('hud.health.blk')}</span>
           <span style={lastBucket && lastBucket.n_blocked > 0 ? CHIP_VALUE_AMBER : CHIP_VALUE}>
             {lastBucket?.n_blocked ?? 0}
           </span>
         </div>
         <div style={CHIP_GROUP}>
-          <span style={CHIP_LABEL}>FILL</span>
+          <span style={CHIP_LABEL}>{t('hud.health.fill')}</span>
           <span style={lastBucket && lastBucket.n_live > 0 ? CHIP_VALUE_LIME : CHIP_VALUE}>
             {lastBucket?.n_live ?? 0}
           </span>
@@ -149,11 +151,11 @@ export function SystemHealthPanel() {
       </div>
 
       {rate && rate.buckets.length > 0 && (
-        <DecisionRateSparkline buckets={rate.buckets} window={DECISIONS_WINDOW_M} />
+        <DecisionRateSparkline buckets={rate.buckets} window={DECISIONS_WINDOW_M} t={t} />
       )}
 
       {blocked && blocked.total_blocked > 0 && (
-        <BlockedBreakdown data={blocked} />
+        <BlockedBreakdown data={blocked} t={t} />
       )}
     </section>
   );
@@ -164,9 +166,10 @@ export function SystemHealthPanel() {
 interface SparkProps {
   buckets: ReadonlyArray<DecisionBucket>;
   window:  number;
+  t:       (key: string, params?: Record<string, string | number>) => string;
 }
 
-function DecisionRateSparkline({ buckets, window: windowMinutes }: SparkProps) {
+function DecisionRateSparkline({ buckets, window: windowMinutes, t }: SparkProps) {
   // API returns newest-first; reverse so the chart reads
   // oldest → newest left-to-right.
   const ordered = [...buckets].reverse();
@@ -179,9 +182,9 @@ function DecisionRateSparkline({ buckets, window: windowMinutes }: SparkProps) {
   return (
     <div style={SECTION}>
       <div style={SECTION_HEAD}>
-        <span className="nx-label">RATE · {windowMinutes}M</span>
+        <span className="nx-label">{t('hud.health.rate30m')}</span>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
-          MAX {maxN}/MIN
+          {t('hud.health.maxN', { n: maxN })}
         </span>
       </div>
       <svg
@@ -218,12 +221,18 @@ function DecisionRateSparkline({ buckets, window: windowMinutes }: SparkProps) {
 
 // ── Blocked-reason breakdown ──────────────────────────────────────────
 
-function BlockedBreakdown({ data }: { data: BlockedReasonsDTO }) {
+function BlockedBreakdown({
+  data,
+  t,
+}: {
+  data: BlockedReasonsDTO;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
   const maxN = data.reasons.reduce((m, r) => Math.max(m, r.n_blocked), 0) || 1;
   return (
     <div style={SECTION}>
       <div style={SECTION_HEAD}>
-        <span className="nx-label">BLOCKED · {data.window_minutes}M</span>
+        <span className="nx-label">{t('hud.health.blockedTitle')}</span>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
           TOTAL {data.total_blocked}
         </span>
@@ -251,13 +260,16 @@ function BlockedBreakdown({ data }: { data: BlockedReasonsDTO }) {
 
 // ── helpers / styles ───────────────────────────────────────────────────
 
-function formatAge(s: number | null): string {
+function formatAge(
+  s: number | null,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   if (s === null) return '—';
-  if (s < 2)    return 'JUST NOW';
-  if (s < 60)   return `${s}s AGO`;
+  if (s < 2)    return t('hud.health.age.now');
+  if (s < 60)   return t('hud.health.age.s', { n: s });
   const m = Math.floor(s / 60);
-  if (m < 60)   return `${m}m AGO`;
-  return `${Math.floor(m / 60)}h AGO`;
+  if (m < 60)   return t('hud.health.age.m', { n: m });
+  return t('hud.health.age.m', { n: Math.floor(m / 60) * 60 });
 }
 
 function agePill(stalled: boolean): React.CSSProperties {
@@ -265,7 +277,7 @@ function agePill(stalled: boolean): React.CSSProperties {
     color:         stalled ? '#FFB200' : '#8A93A8',
     fontSize:      9,
     letterSpacing: '0.08em',
-    fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+    fontFamily:    FONT_MONO,
   };
 }
 
@@ -286,7 +298,7 @@ const CHIP_GROUP: React.CSSProperties = {
   alignItems:    'center',
   justifyContent: 'center',
   gap:           1,
-  fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+  fontFamily:    FONT_MONO,
 };
 
 const CHIP_LABEL: React.CSSProperties = {
@@ -336,7 +348,7 @@ const REASON_ROW: React.CSSProperties = {
   gridTemplateColumns: '88px 1fr auto',
   alignItems:    'center',
   gap:           6,
-  fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+  fontFamily:    FONT_MONO,
   fontSize:      9,
 };
 
@@ -351,19 +363,19 @@ const REASON_LABEL: React.CSSProperties = {
 
 const REASON_TRACK: React.CSSProperties = {
   height:       4,
-  background:   'rgba(255, 178, 0, 0.10)',
+  background:   withAlpha(NEXUS_COLOR.amber, 0.10),
   borderRadius: 2,
   overflow:     'hidden',
 };
 
 const REASON_BAR: React.CSSProperties = {
   height:     '100%',
-  background: 'linear-gradient(90deg, rgba(255, 178, 0, 0.6) 0%, rgba(255, 178, 0, 0.9) 100%)',
+  background: `linear-gradient(90deg, ${withAlpha(NEXUS_COLOR.amber, 0.6)} 0%, ${withAlpha(NEXUS_COLOR.amber, 0.9)} 100%)`,
   transition: 'width 400ms ease-out',
 };
 
 const REASON_COUNT: React.CSSProperties = {
-  color:         '#E8ECF5',
+  color:         NEXUS_COLOR.bone,
   fontVariantNumeric: 'tabular-nums',
   fontSize:      9,
   minWidth:      24,

@@ -17,9 +17,11 @@ import type {
   ProblemDetail,
 } from '../types/api';
 import { PROBLEM_TYPE } from '../types/api';
-import { httpFetch } from './httpFetch';
+import { defaultBackendHttpUrl, httpFetch } from './httpFetch';
 
-const DEFAULT_BASE_URL = 'http://localhost:8001';
+// Sprint 5s+ loop iteration: was duplicated across auditApi/marketApi/
+// metricsApi. Now sourced from httpFetch.ts so VITE_BACKEND_HTTP_URL
+// overrides all three fetchers in lockstep.
 const FETCH_TIMEOUT_MS = 8000;
 
 export interface FetchMetricsOptions {
@@ -72,7 +74,7 @@ async function _fetchMetric<T>(
     };
   }
 
-  const base   = opts.baseUrl ?? DEFAULT_BASE_URL;
+  const base   = opts.baseUrl ?? defaultBackendHttpUrl();
   const params = new URLSearchParams({ window_minutes: String(windowMinutes) });
   const url    = `${base}${path}?${params.toString()}`;
 

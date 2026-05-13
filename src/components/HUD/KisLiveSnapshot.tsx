@@ -18,6 +18,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { fetchTickSnapshot } from '../../services/marketApi';
+import { NEXUS_COLOR, withAlpha } from '../../styles/colors';
+import { FONT_MONO } from '../../styles/fonts';
+import { useLanguage } from '../../utils/i18n';
 import type { MarketTickSnapshot } from '../../types/api';
 import type { NexusEntity } from '../../types/nexus';
 
@@ -61,6 +64,7 @@ function newSlots(): PriceSlots {
 export function KisLiveSnapshot({
   symbols, entityMap, onSelect, selectedId,
 }: KisLiveSnapshotProps) {
+  const { t } = useLanguage();
   const [snapshots, setSnapshots] = useState<MarketTickSnapshot[]>([]);
   const slotsRef = useRef<PriceSlots>(newSlots());
   // Wall-clock at the last successful poll; drives the per-row "live"
@@ -143,7 +147,7 @@ export function KisLiveSnapshot({
       <header className="nx-panel__head">
         <div className="nx-panel__title">
           <span className="nx-dot nx-dot--lime nx-dot--pulse" />
-          <span>KIS LIVE</span>
+          <span>{t('hud.kis.header')}</span>
         </div>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
           {symbols.length} SYMS · 2s
@@ -264,7 +268,7 @@ const ROW: React.CSSProperties = {
   gap:           8,
   padding:       '3px 6px',
   borderRadius:  2,
-  fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+  fontFamily:    FONT_MONO,
   fontSize:      10,
   cursor:        'pointer',
   // Keeping idle bg transparent so the panel reads as one block; only
@@ -275,7 +279,7 @@ const ROW: React.CSSProperties = {
 };
 
 const ROW_SELECTED: React.CSSProperties = {
-  background: 'rgba(0, 191, 255, 0.10)',
+  background: withAlpha(NEXUS_COLOR.cyan, 0.10),
 };
 
 const SYM_TEXT: React.CSSProperties = {

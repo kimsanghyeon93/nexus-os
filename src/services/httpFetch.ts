@@ -19,6 +19,19 @@
 // Caller signal is honored at every step — if the parent aborts
 // between attempts, the retry short-circuits with the original abort.
 
+/** Default backend HTTP base URL. Reads VITE_BACKEND_HTTP_URL at build
+ *  time so the same bundle targets localhost, staging, prod without code
+ *  edits. Falls back to the dev compose mapping (host port 8001 →
+ *  container 8000) per docker-compose.override.yml. Sprint 5s+ loop:
+ *  was duplicated as a literal `'http://localhost:8001'` in
+ *  auditApi.ts / marketApi.ts / metricsApi.ts. The duplication meant
+ *  three places to edit for a new deploy target AND no env override
+ *  path. Now consolidated here, shared by all three. */
+export function defaultBackendHttpUrl(): string {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  return env?.['VITE_BACKEND_HTTP_URL'] ?? 'http://localhost:8001';
+}
+
 export interface HttpFetchOptions extends RequestInit {
   /** Wait before retrying on a transient 5xx. Default 800ms — long
    *  enough to clear the typical FastAPI lifespan window, short

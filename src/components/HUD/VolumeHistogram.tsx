@@ -13,6 +13,9 @@
 import { useEffect, useState } from 'react';
 
 import { fetchVolumeWindow } from '../../services/marketApi';
+import { NEXUS_COLOR, withAlpha } from '../../styles/colors';
+import { FONT_MONO } from '../../styles/fonts';
+import { useLanguage } from '../../utils/i18n';
 import type { MarketVolumeBucket } from '../../types/api';
 import type { NexusEntity } from '../../types/nexus';
 
@@ -29,6 +32,7 @@ export interface VolumeHistogramProps {
 export function VolumeHistogram({
   symbols, entityMap, onSelect, selectedId,
 }: VolumeHistogramProps) {
+  const { t } = useLanguage();
   const [buckets, setBuckets] = useState<MarketVolumeBucket[]>([]);
 
   useEffect(() => {
@@ -80,7 +84,7 @@ export function VolumeHistogram({
       <header className="nx-panel__head">
         <div className="nx-panel__title">
           <span className="nx-dot nx-dot--cyan" />
-          <span>VOLUME · {WINDOW_MINUTES}M</span>
+          <span>{t('hud.vol.title')}</span>
         </div>
         <span className="nx-mono-dim" style={{ fontSize: 9 }}>
           SORTED · DESC
@@ -159,14 +163,14 @@ const LIST: React.CSSProperties = {
 const ROW: React.CSSProperties = {
   padding:       '3px 6px',
   borderRadius:  2,
-  fontFamily:    '"JetBrains Mono", ui-monospace, monospace',
+  fontFamily:    FONT_MONO,
   fontSize:      10,
   cursor:        'pointer',
   background:    'transparent',
 };
 
 const ROW_SELECTED: React.CSSProperties = {
-  background: 'rgba(0, 191, 255, 0.10)',
+  background: withAlpha(NEXUS_COLOR.cyan, 0.10),
 };
 
 const LABEL_ROW: React.CSSProperties = {
@@ -178,34 +182,34 @@ const LABEL_ROW: React.CSSProperties = {
 };
 
 const SYM_TEXT: React.CSSProperties = {
-  color:         '#DEFF9A',
+  color:         NEXUS_COLOR.lime,
   fontWeight:    500,
   letterSpacing: '0.04em',
 };
 
 const LABEL_TEXT: React.CSSProperties = {
-  color:         '#8A93A8',
+  color:         NEXUS_COLOR.ash,
   whiteSpace:    'nowrap',
   overflow:      'hidden',
   textOverflow:  'ellipsis',
 };
 
 const VOL_TEXT: React.CSSProperties = {
-  color:         '#E8ECF5',
+  color:         NEXUS_COLOR.bone,
   fontVariantNumeric: 'tabular-nums',
   fontSize:      9,
 };
 
 const BAR_TRACK: React.CSSProperties = {
   height:        4,
-  background:    'rgba(0, 191, 255, 0.10)',
+  background:    withAlpha(NEXUS_COLOR.cyan, 0.10),
   borderRadius:  2,
   overflow:      'hidden',
 };
 
 const BAR_FILL: React.CSSProperties = {
   height:     '100%',
-  background: 'linear-gradient(90deg, rgba(0, 191, 255, 0.6) 0%, rgba(0, 191, 255, 0.9) 100%)',
+  background: `linear-gradient(90deg, ${withAlpha(NEXUS_COLOR.cyan, 0.6)} 0%, ${withAlpha(NEXUS_COLOR.cyan, 0.9)} 100%)`,
   transition: 'width 400ms ease-out',
 };
 

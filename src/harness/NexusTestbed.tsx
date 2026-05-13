@@ -1,15 +1,23 @@
 // NexusTestbed — wraps <App /> with a fixed Harness Control Panel that
 // drives the injected streamer.
 //
-// The streamer is selected at runtime via the SOURCE control:
-//   • SYNTHETIC      — MockStreamer (random walk over the synthetic universe)
-//   • MOMENTUM/MOCK  — MomentumStreamer in 'mock' mode (Momentum US universe,
-//                      no network) — drives the existing NEXUS sector entities
-//   • MOMENTUM/LIVE  — MomentumStreamer hitting the Alpha Vantage proxy
-//   • HANTOO/STUB    — KIS OpenAPI scaffold, no network
-//   • BACKEND/LIVE   — connects to ws://localhost:8000/v1/stream; the
-//                      nexus-backend mock publisher (or KIS adapter once
-//                      4c lands) drives the canvas
+// Sprint 5s "전면 개선" (frontend mock removal): the backend now publishes
+// REAL prices for both KRX (KIS WS during 09–15:30 KST + Yahoo Finance
+// `.KS` polling off-hours) and US (Yahoo Finance polling). Earlier
+// frontend streamer surfaces — MomentumStreamer (AV proxy, 25/day cap),
+// HanTooStreamer (KIS stub, no network), HybridStreamer (Sprint 5r
+// dual-pipe composite) — became redundant once the backend's
+// `nexus.market.tick` channel carries the full KRX+US universe at the
+// same wire shape. They were deleted.
+//
+// The SOURCE control is now binary:
+//   • BACKEND · LIVE  — production path. nexus-backend WS at
+//                        ws://localhost:8001/v1/stream feeds KRX + US
+//                        ticks. DEFAULT.
+//   • OFFLINE · SIM   — MockStreamer random walk. Kept for the canvas
+//                        to stay alive when the backend is unreachable
+//                        (dev box without `docker compose up`, corp
+//                        proxy outage, etc.). Operator must opt in.
 //
 // Switching source rebuilds the streamer; subscriptions inside <App /> rewire
 // automatically because useMarketData re-runs its effect on streamer change.
@@ -17,10 +25,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import App from '../App';
 import { MockStreamer } from './MockStreamer';
-import { MomentumStreamer } from '../adapters/MomentumStreamer';
-import { HanTooStreamer } from '../adapters/HanTooStreamer';
-import { HybridStreamer } from '../adapters/HybridStreamer';
 import { BackendStreamer } from '../services/BackendStreamer';
+import { NEXUS_COLOR, withAlpha } from '../styles/colors';
+import { FONT_MONO } from '../styles/fonts';
+import { useLanguage } from '../utils/i18n';
 import { loadSourcePref, saveSourcePref } from '../utils/persistence';
 import type { IMarketStreamer } from '../types/streamer';
 
@@ -32,45 +40,31 @@ const DEFAULT_SHOCK_TARGET = 'KRX_SEMI';
 /** Allowlist for both the union type and the persistence validator. Adding a
  *  new source requires updating this single tuple — TS keeps everything else
  *  in lockstep, and `loadSourcePref` will reject any stale localStorage value
- *  that's not in the current allowlist. */
-const SOURCES = ['synthetic', 'momentum-mock', 'momentum-live', 'hantoo-stub', 'backend-live', 'global-live'] as const;
+ *  that's not in the current allowlist (so operators with an old
+ *  'momentum-mock' / 'global-live' preference auto-fall-back to default). */
+const SOURCES = ['backend-live', 'synthetic'] as const;
 type Source = typeof SOURCES[number];
 
 const SOURCE_LABEL: Record<Source, string> = {
-  'synthetic':      'SYNTHETIC',
-  'momentum-mock':  'MOMENTUM · MOCK',
-  'momentum-live':  'MOMENTUM · LIVE',
-  'hantoo-stub':    'HANTOO · STUB',
-  'backend-live':   'BACKEND · LIVE',
-  // Sprint 5r: composite that runs BackendStreamer (KRX via nexus-backend)
-  // alongside MomentumStreamer 'live' (US via Alpha Vantage proxy). Single
-  // selection drives both pipes; canvas + audit modal + KisLiveSnapshot
-  // continue to see KRX flow while the MOMENTUM cluster gets real US
-  // intraday moves on top of the same surface.
-  'global-live':    'GLOBAL · LIVE  ▴KRX+US',
+  'backend-live':   'BACKEND · LIVE  ▴KRX+US',
+  'synthetic':      'OFFLINE · SIM',
 };
 
 function makeStreamer(source: Source): IMarketStreamer {
   switch (source) {
-    case 'synthetic':     return new MockStreamer();
-    case 'momentum-mock': return new MomentumStreamer({ source: 'mock' });
-    case 'momentum-live': return new MomentumStreamer({ source: 'live' });
-    case 'hantoo-stub':   return new HanTooStreamer({ stubMode: true });
     case 'backend-live':  return new BackendStreamer();
-    case 'global-live':   return new HybridStreamer(
-                            new BackendStreamer(),
-                            new MomentumStreamer({ source: 'live' }),
-                          );
+    case 'synthetic':     return new MockStreamer();
   }
 }
 
 export function NexusTestbed() {
   // Lazy initializer — read once on first mount. Subsequent renders ignore
   // localStorage so a tab that's been open across two storage events doesn't
-  // flicker its source. Validated against SOURCES; bad/unknown values fall
-  // back to 'synthetic'.
+  // flicker its source. Validated against SOURCES; bad/unknown values
+  // (including stale 'momentum-mock' / 'global-live' / 'hantoo-stub' from
+  // pre-5s sessions) auto-fall-back to 'backend-live' — the real-data path.
   const [source, setSource] = useState<Source>(() =>
-    loadSourcePref(SOURCES, 'synthetic'),
+    loadSourcePref(SOURCES, 'backend-live'),
   );
   const [freq, setFreq] = useState(30);
   // selectedId is lifted up so the harness's shock button can target whatever
@@ -134,6 +128,7 @@ interface HarnessPanelProps {
 function HarnessPanel({
   source, onSourceChange, freq, onFreqChange, shockTarget, onShock,
 }: HarnessPanelProps) {
+  const { t } = useLanguage();
   const fps = useFps();
   const fpsColor =
     fps >= 55 ? '#00BFFF' : fps >= 40 ? '#FFB200' : '#DEFF9A';
@@ -144,7 +139,11 @@ function HarnessPanel({
         padding: '12px 14px',
         background: 'transparent',
         color: '#E8ECF5',
-        fontFamily: '"JetBrains Mono", monospace',
+        // Sprint 5s+ loop: was '"JetBrains Mono", monospace' — missing
+        // the `ui-monospace` step every other HUD surface includes.
+        // Normalized to FONT_MONO so the harness panel renders with
+        // the same fallback stack as the panels it wraps.
+        fontFamily: FONT_MONO,
         fontSize: 10,
         letterSpacing: '0.06em',
         userSelect: 'none',
@@ -159,16 +158,17 @@ function HarnessPanel({
         }}
       >
         <div style={{ color: '#00BFFF', fontWeight: 600 }}>
-          ◆ HARNESS · DATA INJECTION
+          {t('harness.title')}
         </div>
-        <div style={{ color: fpsColor }}>{fps} FPS</div>
+        <div style={{ color: fpsColor }}>{t('harness.fps', { n: fps })}</div>
       </div>
 
-      {/* Source selector — driven by SOURCES so adding a new option in the
-          tuple at the top of the file flows through here automatically. */}
+      {/* Source selector — binary post-5s. BACKEND·LIVE is the production
+          path (real KRX+US ticks); OFFLINE·SIM is the fallback when the
+          backend can't be reached. Two-button row, equal width. */}
       <div style={{ marginBottom: 10 }}>
-        <div style={{ color: '#8A93A8', marginBottom: 4 }}>SOURCE</div>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        <div style={{ color: '#8A93A8', marginBottom: 4 }}>{t('harness.source')}</div>
+        <div style={{ display: 'flex', gap: 4 }}>
           {SOURCES.map(s => {
             const active = s === source;
             return (
@@ -178,12 +178,17 @@ function HarnessPanel({
                 data-testid={`source-${s}`}
                 onClick={() => onSourceChange(s)}
                 style={{
-                  flex: '1 1 calc(33% - 4px)',
+                  flex: '1 1 0',
                   minWidth: 0,
-                  padding: '5px 4px',
-                  background: active ? 'rgba(0, 191, 255, 0.12)' : 'transparent',
-                  color: active ? '#00BFFF' : '#8A93A8',
-                  border: `1px solid ${active ? 'rgba(0, 191, 255, 0.55)' : '#2A2D44'}`,
+                  padding: '6px 4px',
+                  background: active ? withAlpha(NEXUS_COLOR.cyan, 0.12) : 'transparent',
+                  color: active ? NEXUS_COLOR.cyan : NEXUS_COLOR.ash,
+                  // Sprint 5s+: `#2A2D44` is the harness panel's structural
+                  // border tone — darker than NEXUS_COLOR.low so it reads
+                  // as inactive UI chrome instead of a content separator.
+                  // Not in NEXUS_COLOR; keeping the literal here as the
+                  // single defined usage. Future tokenize if it spreads.
+                  border: `1px solid ${active ? withAlpha(NEXUS_COLOR.cyan, 0.55) : '#2A2D44'}`,
                   borderRadius: 2,
                   fontFamily: 'inherit',
                   fontSize: 9,
@@ -191,7 +196,7 @@ function HarnessPanel({
                   cursor: 'pointer',
                 }}
               >
-                {SOURCE_LABEL[s]}
+                {t(s === 'backend-live' ? 'harness.source.backend' : 'harness.source.offline')}
               </button>
             );
           })}
@@ -207,8 +212,8 @@ function HarnessPanel({
           color: '#8A93A8',
         }}
       >
-        <span>FREQUENCY</span>
-        <span style={{ color: '#00BFFF' }}>{freq} pkt/s</span>
+        <span>{t('harness.frequency')}</span>
+        <span style={{ color: '#00BFFF' }}>{t('harness.freqUnit', { n: freq })}</span>
       </label>
       <input
         type="range"
@@ -238,10 +243,10 @@ function HarnessPanel({
           fontWeight: 600,
           cursor: 'pointer',
           textTransform: 'uppercase',
-          boxShadow: '0 0 12px rgba(222, 255, 154, 0.18)',
+          boxShadow: `0 0 12px ${withAlpha(NEXUS_COLOR.lime, 0.18)}`,
         }}
       >
-        ▲ Simulate Market Shock · {shockTarget}
+        {t('harness.shock', { target: shockTarget })}
       </button>
 
       <div
@@ -253,16 +258,8 @@ function HarnessPanel({
         }}
       >
         {source === 'backend-live'
-          ? 'WS → ws://localhost:8000/v1/stream · nexus-backend mock publisher feeds 12 KRX symbols.'
-          : source === 'hantoo-stub'
-          ? 'KIS OpenAPI scaffold. No network. KRX entities ticking.'
-          : source === 'momentum-live'
-          ? 'Live polls Alpha Vantage proxy (~30s/batch). 28 tickers.'
-          : source === 'momentum-mock'
-          ? 'Momentum cluster live — 28 US tickers, |Δ%|≥7 → lime.'
-          : `Slide to ${FREQ_MAX} pkt/s to stress the canvas.`}
-        <br />
-        Shock fires a 4-hop cascading ripple.
+          ? t('harness.source.backendDesc')
+          : t('harness.source.offlineDesc', { max: FREQ_MAX })}
       </div>
     </div>
   );

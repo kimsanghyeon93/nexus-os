@@ -32,6 +32,16 @@ interface BackendTick {
 
 const TELEMETRY_INTERVAL_MS = 1000;
 
+/** Default WS URL. Reads VITE_BACKEND_WS_URL at build time so the same
+ *  bundle can target localhost, staging, prod without code edits. Falls
+ *  back to the dev compose mapping (host port 8001 → container 8000)
+ *  per docker-compose.override.yml. Sprint 5s+ loop: extracted from the
+ *  constructor default — was hardcoded since BackendStreamer landed. */
+function defaultBackendWsUrl(): string {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  return env?.['VITE_BACKEND_WS_URL'] ?? 'ws://localhost:8001/v1/stream';
+}
+
 // Reconnect schedule — exponential backoff, capped. The backend's
 // docker-compose health gate can take a few seconds to come up after a
 // rebuild; tighter cadence early, longer cadence after to avoid burning
@@ -65,7 +75,7 @@ export class BackendStreamer implements IMarketStreamer {
   private reconnectStep:   number         = 0;
   private reconnectTimer:  number | null  = null;
 
-  constructor(private url: string = 'ws://localhost:8001/v1/stream') {}
+  constructor(private url: string = defaultBackendWsUrl()) {}
 
   // ── IMarketStreamer ──────────────────────────────────────────────────
 

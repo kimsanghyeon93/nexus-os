@@ -54,7 +54,13 @@ export interface NexusEntity {
   eigen?: number;
 }
 
-export type EdgeKind = 'cluster' | 'inter';
+// Sprint 5s+: 'sector' edge kind. Stocks → their sector hub (KRX
+// stocks → KRX_SEMI/AUTO/etc.; US momentum tickers → XLK/XLF/etc.)
+// got rendered identically to "random cross-cluster" lines, hiding
+// the ontology's most semantically loaded relationship. The new kind
+// gets its own styling (cluster-colored, higher alpha) so the sector
+// membership graph is the FIRST thing the operator's eye picks up.
+export type EdgeKind = 'cluster' | 'inter' | 'sector';
 
 export interface NexusEdge {
   from: string;

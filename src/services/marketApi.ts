@@ -15,9 +15,11 @@ import type {
   ProblemDetail,
 } from '../types/api';
 import { PROBLEM_TYPE } from '../types/api';
-import { httpFetch } from './httpFetch';
+import { defaultBackendHttpUrl, httpFetch } from './httpFetch';
 
-const DEFAULT_BASE_URL = 'http://localhost:8001';
+// Sprint 5s+ loop iteration: was duplicated across auditApi/marketApi/
+// metricsApi. Now sourced from httpFetch.ts so VITE_BACKEND_HTTP_URL
+// overrides all three fetchers in lockstep.
 const FETCH_TIMEOUT_MS = 8000;
 
 export interface FetchTicksOptions {
@@ -47,7 +49,7 @@ export async function fetchRecentTicks(
     };
   }
 
-  const base   = opts.baseUrl ?? DEFAULT_BASE_URL;
+  const base   = opts.baseUrl ?? defaultBackendHttpUrl();
   const params = new URLSearchParams({ symbol, limit: String(limit) });
   const url    = `${base}/v1/ticks/recent?${params.toString()}`;
 
@@ -154,7 +156,7 @@ export async function fetchTickSnapshot(
     };
   }
 
-  const base   = opts.baseUrl ?? DEFAULT_BASE_URL;
+  const base   = opts.baseUrl ?? defaultBackendHttpUrl();
   const params = new URLSearchParams({ symbols: clean.join(',') });
   const url    = `${base}/v1/ticks/snapshot?${params.toString()}`;
 
@@ -269,7 +271,7 @@ export async function fetchTickTape(
     };
   }
 
-  const base   = opts.baseUrl ?? DEFAULT_BASE_URL;
+  const base   = opts.baseUrl ?? defaultBackendHttpUrl();
   const params = new URLSearchParams({
     symbols: clean.join(','),
     limit:   String(limit),
@@ -392,7 +394,7 @@ export async function fetchVolumeWindow(
     };
   }
 
-  const base   = opts.baseUrl ?? DEFAULT_BASE_URL;
+  const base   = opts.baseUrl ?? defaultBackendHttpUrl();
   const params = new URLSearchParams({
     symbols:        clean.join(','),
     window_minutes: String(windowMinutes),

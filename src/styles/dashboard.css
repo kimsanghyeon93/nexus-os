@@ -459,9 +459,27 @@ html, body, #root {
    * panel's internal density. */
   padding-right: 14px;
 }
-.nx-app__right-main > .nx-prop    { flex: 0 0 auto; }
-.nx-app__right-main > .nx-hist    { flex: 0 0 auto; }
-.nx-app__right-main > .nx-diffsum { flex: 0 0 auto; }
+/* Every direct child must keep its natural height so the parent scrolls
+ * instead of crushing them to zero. Sprint 5s: SystemHealthPanel /
+ * KisLiveSnapshot / VolumeHistogram / TapePanel all extend the bare
+ * `.nx-panel` class without one of the legacy `.nx-prop|hist|diffsum`
+ * modifiers, so the previous per-class rules silently dropped them out
+ * of the `flex: 0 0 auto` allowlist. With `flex-direction: column +
+ * min-height: 0` on the parent and the default `flex: 0 1 auto` on the
+ * children, the four panels collapsed to height=0 and their content
+ * painted on top of each other — the "중첩" the operator reported.
+ *
+ * Specificity note: bare `> *` is (0,1,0), tied with the `.nx-prop {
+ * flex: 1 1 auto; }` rule farther down the file and loses by source
+ * order. The two-class selectors below are (0,2,0) so they override
+ * regardless of where `.nx-prop`'s base flex sits. The `.nx-panel`
+ * arm covers PropertyHUD (which IS `.nx-panel.nx-prop`) plus every
+ * new panel that follows the convention; `.nx-hist` stays a separate
+ * arm because the legacy CaptureHistory section omits `.nx-panel`. */
+.nx-app__right-main > .nx-panel,
+.nx-app__right-main > .nx-hist {
+  flex: 0 0 auto;
+}
 
 /* Scoped scrollbar styling for the right column + any panel inside it
  * that scrolls (PropertyHUD's internal .nx-prop, etc). Matches the

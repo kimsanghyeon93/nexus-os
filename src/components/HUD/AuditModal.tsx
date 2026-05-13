@@ -22,7 +22,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchRecentAudit } from '../../services/auditApi';
+import { NEXUS_COLOR, NEXUS_SURFACE, withAlpha } from '../../styles/colors';
+import { FONT_MONO } from '../../styles/fonts';
+import { useLanguage } from '../../utils/i18n';
 import type { ApiResult, AuditRecentDTO, AuditRow } from '../../types/api';
+
+// Sprint 5s+ loop iteration: aliasing the canonical palette as COLOR so
+// the inline-style block below reads tersely (COLOR.cyan / COLOR.lime /…).
+// Previous version had a TONE_COLOR subset + 25 raw hex literals
+// scattered through styles — every hex was a duplicate of values in
+// `src/styles/colors.ts`. Switching to COLOR.X centralizes the source
+// of truth without touching any rendered byte.
+const COLOR = NEXUS_COLOR;
 
 const ROW_LIMIT = 20;
 const AUTO_REFRESH_INTERVAL_MS = 3000;
@@ -70,6 +81,7 @@ interface AuditModalInnerProps {
 }
 
 function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerProps) {
+  const { t } = useLanguage();
   const [state, setState] = useState<AuditFetchState>({ kind: 'loading' });
   const [retryToken, setRetryToken] = useState(0);
   // Auto-refresh is the default — coordinator decisions land at ~2/sec
@@ -227,11 +239,11 @@ function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerPro
                 : 'Resume auto-refresh (3s polling)'}
               style={{
                 ...AUTO_BTN,
-                color:       autoRefresh ? '#DEFF9A' : '#8A93A8',
-                borderColor: autoRefresh ? '#DEFF9A' : 'rgba(0, 191, 255, 0.30)',
+                color:       autoRefresh ? COLOR.lime : COLOR.ash,
+                borderColor: autoRefresh ? COLOR.lime : withAlpha(NEXUS_COLOR.cyan, 0.30),
               }}
             >
-              {autoRefresh ? '◉ LIVE' : '◯ PAUSED'}
+              {autoRefresh ? t('hud.audit.live') : `◯ ${t('hud.audit.paused')}`}
             </button>
             <button
               type="button"
@@ -274,10 +286,11 @@ function AuditModalInner({ symbol, label, baseUrl, onClose }: AuditModalInnerPro
 // ── State branches ────────────────────────────────────────────────────
 
 function LoadingState() {
+  const { t } = useLanguage();
   return (
     <div data-testid="audit-loading" style={CENTER_PANEL}>
       <div style={SPINNER} aria-hidden />
-      <div style={STATUS_LINE}>FETCHING AUDIT TRAIL...</div>
+      <div style={STATUS_LINE}>{t('hud.audit.fetching')}...</div>
       <div style={STATUS_HINT}>Querying execution_audit hypertable</div>
     </div>
   );
@@ -290,6 +303,7 @@ interface ErrorStateProps {
 }
 
 function ErrorState({ title, detail, onRetry }: ErrorStateProps) {
+  const { t } = useLanguage();
   return (
     <div data-testid="audit-error" style={CENTER_PANEL}>
       <div style={ERR_ICON} aria-hidden>◆</div>
@@ -301,17 +315,18 @@ function ErrorState({ title, detail, onRetry }: ErrorStateProps) {
         data-testid="audit-retry"
         style={RETRY_BTN}
       >
-        RETRY
+        {t('hud.audit.retry')}
       </button>
     </div>
   );
 }
 
 function EmptyState({ symbol }: { symbol: string }) {
+  const { t } = useLanguage();
   return (
     <div data-testid="audit-empty" style={CENTER_PANEL}>
       <div style={EMPTY_GLYPH} aria-hidden>∅</div>
-      <div style={STATUS_LINE}>NO DECISIONS LOGGED</div>
+      <div style={STATUS_LINE}>{t('hud.audit.empty')}</div>
       <div style={STATUS_HINT}>
         No coordinator output recorded for <strong>{symbol}</strong> yet.
         Once a tick arrives, every guarded / shadow / live decision lands here.
@@ -429,19 +444,24 @@ function formatTs(iso: string): string {
 // Inline styles keep this self-contained — modal carries its own theme
 // without nexus.css edits.
 
+// Sprint 5s+ loop iteration: TONE_COLOR removed; reads from NEXUS_COLOR
+// via the COLOR alias at the top. Note that AuditModal uses 'low' for
+// what the canonical palette calls 'ash' (#8A93A8) — we keep the
+// behavior by mapping tone='low' to COLOR.ash below.
 const TONE_COLOR: Record<'lime' | 'amber' | 'cyan' | 'low', string> = {
-  lime:  '#DEFF9A',
-  amber: '#FFB200',
-  cyan:  '#00BFFF',
-  low:   '#8A93A8',
+  lime:  COLOR.lime,
+  amber: COLOR.amber,
+  cyan:  COLOR.cyan,
+  low:   COLOR.ash,
 };
 
-const FONT_MONO = '"JetBrains Mono", ui-monospace, monospace';
+// Sprint 5s+ loop iteration: FONT_MONO moved to src/styles/fonts.ts
+// (shared with every other HUD surface). Import added at the top.
 
 const BACKDROP: React.CSSProperties = {
   position:  'fixed',
   inset:     0,
-  background: 'rgba(2, 4, 12, 0.78)',
+  background: NEXUS_SURFACE.backdrop,
   backdropFilter: 'blur(6px)',
   WebkitBackdropFilter: 'blur(6px)',
   zIndex:    1400,
@@ -458,11 +478,11 @@ const FRAME: React.CSSProperties = {
   maxHeight: '78vh',
   display:   'flex',
   flexDirection: 'column',
-  background: 'rgba(11, 11, 24, 0.92)',
-  border:    '0.8px solid rgba(0, 191, 255, 0.55)',
-  boxShadow: '0 0 24px rgba(0, 191, 255, 0.18)',
+  background: NEXUS_SURFACE.panel,
+  border:    `0.8px solid ${withAlpha(COLOR.cyan, 0.55)}`,
+  boxShadow: `0 0 24px ${withAlpha(COLOR.cyan, 0.18)}`,
   fontFamily: FONT_MONO,
-  color:     '#E8ECF5',
+  color:     COLOR.bone,
   borderRadius: 3,
 };
 
@@ -470,7 +490,7 @@ const CORNER_BASE: React.CSSProperties = {
   position:    'absolute',
   width:       12,
   height:      12,
-  color:       '#00BFFF',
+  color:       COLOR.cyan,
   fontSize:    14,
   lineHeight:  '12px',
   pointerEvents: 'none',
@@ -485,11 +505,11 @@ const HEADER: React.CSSProperties = {
   alignItems: 'flex-start',
   justifyContent: 'space-between',
   padding:    '16px 20px 12px',
-  borderBottom: '0.8px solid rgba(0, 191, 255, 0.20)',
+  borderBottom: `0.8px solid ${withAlpha(COLOR.cyan, 0.20)}`,
 };
 
 const TITLE: React.CSSProperties = {
-  color:        '#00BFFF',
+  color:        COLOR.cyan,
   fontSize:     12,
   letterSpacing: '0.10em',
   textTransform: 'uppercase',
@@ -497,7 +517,7 @@ const TITLE: React.CSSProperties = {
 };
 
 const SUBTITLE: React.CSSProperties = {
-  color:        '#8A93A8',
+  color:        COLOR.ash,
   fontSize:     10,
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
@@ -506,8 +526,8 @@ const SUBTITLE: React.CSSProperties = {
 
 const CLOSE_BTN: React.CSSProperties = {
   background: 'transparent',
-  border:     '0.8px solid rgba(0, 191, 255, 0.30)',
-  color:      '#00BFFF',
+  border:     `0.8px solid ${withAlpha(COLOR.cyan, 0.30)}`,
+  color:      COLOR.cyan,
   width:      24,
   height:     24,
   fontSize:   16,
@@ -539,7 +559,7 @@ const AUTO_BTN: React.CSSProperties = {
 };
 
 const REFRESH_DOT: React.CSSProperties = {
-  color:         '#DEFF9A',
+  color:         COLOR.lime,
   marginLeft:    6,
   // Inherits the SUBTITLE text styling; the dot is intentionally small +
   // ephemeral (only visible during the ~50ms fetch round-trip).
@@ -553,13 +573,13 @@ const BODY: React.CSSProperties = {
   // injected at the bottom of this file (CSS-in-React-style props don't
   // support ::-webkit-scrollbar).
   scrollbarWidth: 'thin',
-  scrollbarColor: 'rgba(0, 191, 255, 0.35) transparent',
+  scrollbarColor: `${withAlpha(COLOR.cyan, 0.35)} transparent`,
 };
 
 const FOOTER: React.CSSProperties = {
   padding:    '8px 20px',
-  borderTop:  '0.8px solid rgba(0, 191, 255, 0.20)',
-  color:      '#4A5066',
+  borderTop:  `0.8px solid ${withAlpha(COLOR.cyan, 0.20)}`,
+  color:      COLOR.low,
   fontSize:   9,
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
@@ -580,22 +600,22 @@ const SPINNER: React.CSSProperties = {
   width:        18,
   height:       18,
   borderRadius: '50%',
-  border:       '1.5px solid rgba(0, 191, 255, 0.18)',
-  borderTopColor: '#00BFFF',
+  border:       `1.5px solid ${withAlpha(COLOR.cyan, 0.18)}`,
+  borderTopColor: COLOR.cyan,
   animation:    'nxAuditSpin 0.9s linear infinite',
   marginBottom: 12,
 };
 
 const STATUS_LINE: React.CSSProperties = {
-  color:        '#00BFFF',
+  color:        COLOR.cyan,
   fontSize:     11,
   letterSpacing: '0.10em',
 };
 
-const STATUS_LINE_AMBER: React.CSSProperties = { ...STATUS_LINE, color: '#FFB200' };
+const STATUS_LINE_AMBER: React.CSSProperties = { ...STATUS_LINE, color: COLOR.amber };
 
 const STATUS_HINT: React.CSSProperties = {
-  color:     '#8A93A8',
+  color:     COLOR.ash,
   fontSize:  10,
   marginTop: 8,
   maxWidth:  420,
@@ -603,14 +623,14 @@ const STATUS_HINT: React.CSSProperties = {
 };
 
 const ERR_ICON: React.CSSProperties = {
-  color:     '#FFB200',
+  color:     COLOR.amber,
   fontSize:  20,
   marginBottom: 8,
 };
 
 const ERR_DETAIL: React.CSSProperties = {
   ...STATUS_HINT,
-  color: '#E8ECF5',
+  color: COLOR.bone,
 };
 
 const RETRY_BTN: React.CSSProperties = {
@@ -618,7 +638,7 @@ const RETRY_BTN: React.CSSProperties = {
   padding:   '6px 16px',
   background: 'transparent',
   border:    '0.8px solid #FFB200',
-  color:     '#FFB200',
+  color:     COLOR.amber,
   fontSize:  10,
   letterSpacing: '0.10em',
   textTransform: 'uppercase',
@@ -628,7 +648,7 @@ const RETRY_BTN: React.CSSProperties = {
 };
 
 const EMPTY_GLYPH: React.CSSProperties = {
-  color:     '#4A5066',
+  color:     COLOR.low,
   fontSize:  28,
   marginBottom: 8,
 };
@@ -643,8 +663,8 @@ const LIST: React.CSSProperties = {
 };
 
 const ROW: React.CSSProperties = {
-  background:  'rgba(0, 191, 255, 0.04)',
-  borderLeft:  '2px solid #00BFFF',
+  background:  withAlpha(COLOR.cyan, 0.04),
+  borderLeft:  `2px solid ${COLOR.cyan}`,
   borderRadius: 2,
   padding:     '10px 12px',
 };
@@ -666,13 +686,13 @@ const MODE_BADGE: React.CSSProperties = {
 };
 
 const ROW_TS: React.CSSProperties = {
-  color:    '#8A93A8',
+  color:    COLOR.ash,
   fontSize: 10,
 };
 
 const ROW_INTENT: React.CSSProperties = {
   fontSize:    11,
-  color:       '#E8ECF5',
+  color:       COLOR.bone,
   marginBottom: 4,
 };
 
@@ -681,12 +701,12 @@ const ROW_REASON: React.CSSProperties = {
   flexWrap:   'wrap',
   gap:        '4px 8px',
   fontSize:   10,
-  color:      '#8A93A8',
+  color:      COLOR.ash,
   marginTop:  4,
 };
 
 const LABEL: React.CSSProperties = {
-  color:         '#4A5066',
+  color:         COLOR.low,
   fontSize:      9,
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
@@ -694,15 +714,15 @@ const LABEL: React.CSSProperties = {
 };
 
 const CODE: React.CSSProperties = {
-  color:      '#DEFF9A',
+  color:      COLOR.lime,
   fontFamily: FONT_MONO,
-  background: 'rgba(222, 255, 154, 0.08)',
+  background: withAlpha(COLOR.lime, 0.08),
   padding:    '0 4px',
   borderRadius: 2,
 };
 
 const SEP: React.CSSProperties = {
-  color:   '#4A5066',
+  color:   COLOR.low,
   margin:  '0 4px',
 };
 
@@ -713,7 +733,7 @@ const ROW_RATIONALE: React.CSSProperties = {
 
 const SUMMARY: React.CSSProperties = {
   cursor:        'pointer',
-  color:         '#00BFFF',
+  color:         COLOR.cyan,
   fontSize:      9,
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
@@ -726,7 +746,7 @@ const RATIONALE_LIST: React.CSSProperties = {
   display:   'flex',
   flexDirection: 'column',
   gap:       2,
-  color:     '#8A93A8',
+  color:     COLOR.ash,
 };
 
 const RATIONALE_ITEM: React.CSSProperties = {
@@ -736,7 +756,7 @@ const RATIONALE_ITEM: React.CSSProperties = {
 const ROW_ORDER_ID: React.CSSProperties = {
   marginTop:     6,
   fontSize:      9,
-  color:         '#8A93A8',
+  color:         COLOR.ash,
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
 };
@@ -763,11 +783,11 @@ if (typeof document !== 'undefined' && !document.getElementById('nx-audit-spin-c
       background: transparent;
     }
     [data-testid="audit-modal"] ::-webkit-scrollbar-thumb {
-      background: rgba(0, 191, 255, 0.28);
+      background: ${withAlpha(COLOR.cyan, 0.28)};
       border-radius: 3px;
     }
     [data-testid="audit-modal"] ::-webkit-scrollbar-thumb:hover {
-      background: rgba(0, 191, 255, 0.55);
+      background: ${withAlpha(COLOR.cyan, 0.55)};
     }
     [data-testid="audit-modal"] ::-webkit-scrollbar-corner {
       background: transparent;

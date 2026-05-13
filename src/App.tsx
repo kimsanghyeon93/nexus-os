@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMarketData } from './hooks/useMarketData';
-import { TopBar } from './components/HUD/TopBar';
+import { TopBar, type TopBarTab } from './components/HUD/TopBar';
+import { TopBarOverlay } from './components/HUD/TopBarOverlay';
 import { CommandCenter } from './components/HUD/CommandCenter';
 import { PropertyHUD } from './components/HUD/PropertyHUD';
 import { CaptureHistory } from './components/HUD/CaptureHistory';
@@ -18,6 +19,7 @@ import { TapePanel } from './components/HUD/TapePanel';
 import { VolumeHistogram } from './components/HUD/VolumeHistogram';
 import { SystemHealthPanel } from './components/HUD/SystemHealthPanel';
 import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
+import { NEXUS_COLOR, NEXUS_SURFACE, withAlpha } from './styles/colors';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
 import { summarizeDiff, type DiffFilter } from './utils/diff';
 import { loadLayoutPref, saveLayoutPref, loadTourSeen, saveTourSeen } from './utils/persistence';
@@ -182,6 +184,12 @@ export default function App({
   // after the operator selects something else underneath.
   const [auditTarget, setAuditTarget] =
     useState<{ id: string; label: string } | null>(null);
+
+  // Sprint 5s+ toolbar: active TopBar tab. 'ontology' = the canvas
+  // (default). Other tabs trigger a TopBarOverlay rendering snapshots /
+  // investigations / actions over the canvas. Switching back to
+  // 'ontology' or pressing ESC closes the overlay.
+  const [activeTab, setActiveTab] = useState<TopBarTab>('ontology');
 
   // Tiny toast for command feedback (⌘I/⌘T lock/unlock, ⌘R no-shock).
   // Auto-clears after 2.4s.
@@ -541,6 +549,25 @@ export default function App({
         connectionState={connectionState}
         {...(sourceLabel !== undefined ? { sourceLabel } : {})}
         {...(sourceKind  !== undefined ? { sourceKind  } : {})}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+      <TopBarOverlay
+        activeTab={activeTab}
+        snapshots={snapshotHistory}
+        onSnapshotReDownload={handleReplay}
+        entities={dataset.ENTITIES}
+        onEntitySelect={(id) => {
+          // Match the canvas-click path: pick the entity, fire ⌘L so the
+          // operator lands directly on its audit trail, and close the
+          // overlay so the canvas regains focus.
+          setSelectedId(id);
+          const e = dataset.ENTITIES.find(ent => ent.id === id);
+          setAuditTarget({ id, label: e?.label ?? id });
+          setActiveTab('ontology');
+        }}
+        onCommand={(id) => { handleCommand(id); }}
+        onClose={() => setActiveTab('ontology')}
       />
       <div
         className={
@@ -681,7 +708,7 @@ export default function App({
             left: '50%',
             transform: 'translateX(-50%)',
             padding: '8px 16px',
-            background: 'rgba(11, 11, 24, 0.92)',
+            background: NEXUS_SURFACE.panel,
             border: '0.8px solid var(--cyan, #00BFFF)',
             borderRadius: '3px',
             color: 'var(--cyan, #00BFFF)',
@@ -690,7 +717,7 @@ export default function App({
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             zIndex: 1300,
-            boxShadow: '0 0 12px rgba(0, 191, 255, 0.25)',
+            boxShadow: `0 0 12px ${withAlpha(NEXUS_COLOR.cyan, 0.25)}`,
             pointerEvents: 'none',
           }}
         >
