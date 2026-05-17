@@ -36,6 +36,16 @@ export const PROBLEM_TYPE = {
   VALIDATION: 'https://nexus-os.local/problems/validation-error',
   AUTH:       'https://nexus-os.local/problems/auth-failed',
   INTERNAL:   'https://nexus-os.local/problems/internal-error',
+  /** 400-class — query parameter or path argument failed enum / range
+   *  / shape validation at the router layer. Distinct from VALIDATION
+   *  (422, Pydantic body-level). Frontend dispatches both to the same
+   *  "error-other" branch and renders `{title} — {detail}`. */
+  INVALID_INPUT: 'https://nexus-os.local/problems/invalid-input',
+  /** 503-class — a downstream the service depends on (alarm repo,
+   *  market store, etc.) is unavailable. Pre-registered for forward
+   *  compat: today only the alarms endpoint surfaces an analogue, and
+   *  it falls back to an empty 200 in normal operation. */
+  UPSTREAM_ERROR: 'https://nexus-os.local/problems/upstream-error',
   /** Synthesized client-side when fetch() itself fails (network down, CORS, etc.) */
   NETWORK:    'https://nexus-os.local/problems/network-error',
 } as const;
@@ -226,6 +236,79 @@ export interface MarketVolumeBucket {
 export interface MarketVolumeWindowDTO {
   window_minutes: number;
   buckets:        MarketVolumeBucket[];
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  /v1/alarms — Operator Alarms (Sprint 5t — system_alarm read-side)
+// ──────────────────────────────────────────────────────────────────────
+
+/** Severity rank for an `AlarmDTO`. Wire format is the lowercase token
+ *  exactly as the Pydantic `Severity(str, Enum)` enum emits — frontend
+ *  must compare against these strings, not synthesize numeric ranks. */
+export type AlarmSeverity = 'info' | 'warn' | 'anomaly' | 'critical';
+
+/** Lifecycle status for an `AlarmDTO`. Maps directly to the backend
+ *  `Status(str, Enum)` enum; the `acknowledged_at` / `resolved_at`
+ *  timestamps are non-null precisely when the status implies them. */
+export type AlarmStatus = 'active' | 'acknowledged' | 'resolved';
+
+/** One alarm row. Mirrors `nexus-backend.src.api.v1.dto.AlarmDTO`
+ *  byte-for-byte — snake_case throughout, no alias remap. The backend's
+ *  domain layer enforces these invariants:
+ *    status='active'        ⇒ acknowledged_at === null AND resolved_at === null
+ *    status='acknowledged'  ⇒ acknowledged_at !== null AND resolved_at === null
+ *    status='resolved'      ⇒ resolved_at !== null (ack step optional)
+ *    occurred_at ≤ acknowledged_at ≤ resolved_at (time ordering) */
+export interface AlarmDTO {
+  /** ULID/UUIDv7 — stable identifier, used as the React row key. */
+  id:                string;
+  severity:          AlarmSeverity;
+  status:            AlarmStatus;
+  /** Originating component (kebab-case, e.g. `trading-coordinator`). */
+  source:            string;
+  /** Machine-parseable stable code (UPPER_SNAKE, ≤64). */
+  code:              string;
+  /** ALL CAPS short label (≤48 chars) shown in the row. */
+  title:             string;
+  /** Single-line observational message (≤240 chars). */
+  message:           string;
+  /** Ontology entity id this alarm references — null when no entity. */
+  entity_id:         string | null;
+  /** ISO-8601 UTC. Newest-first ordering anchor. */
+  occurred_at:       string;
+  /** ISO-8601 UTC. null while status='active'. */
+  acknowledged_at:   string | null;
+  /** ISO-8601 UTC. null until status='resolved'. */
+  resolved_at:       string | null;
+  /** Source-specific extras. Expanded row sorts keys alphabetically. */
+  metadata:          Record<string, unknown> | null;
+}
+
+/** Envelope returned by `GET /v1/alarms`. `items` is newest-first;
+ *  `unacknowledged_count` is a *global* active count (ignores filters);
+ *  `window_since` is the effective lower bound (echoed `since` or the
+ *  server-applied 24h lookback); `server_time` lets the client compute
+ *  age values without trusting the local clock. */
+export interface AlarmListDTO {
+  items:                AlarmDTO[];
+  total:                number;
+  unacknowledged_count: number;
+  /** ISO-8601 UTC, or null if the backend chose not to apply a lookback. */
+  window_since:         string | null;
+  server_time:          string;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  /v1/health — publisher source indicator
+// ──────────────────────────────────────────────────────────────────────
+
+/** Active tick source reported by PublisherSupervisor. */
+export type PublisherKind = 'kis' | 'mock' | 'none';
+
+export interface HealthDTO {
+  status:    string;
+  service:   string;
+  publisher: PublisherKind;
 }
 
 // ──────────────────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@ import { FONT_MONO } from '../styles/fonts';
 import { useLanguage } from '../utils/i18n';
 import { loadSourcePref, saveSourcePref } from '../utils/persistence';
 import type { IMarketStreamer } from '../types/streamer';
+import { useSystemHealth } from '../hooks/useSystemHealth';
 
 const FREQ_MIN = 10;
 const FREQ_MAX = 120;
@@ -70,6 +71,7 @@ export function NexusTestbed() {
   // selectedId is lifted up so the harness's shock button can target whatever
   // entity the operator currently has locked on the radar / PropertyHUD.
   const [selectedId, setSelectedId] = useState<string | null>('OBSIDIAN');
+  const { publisher, loading: healthLoading } = useSystemHealth();
 
   // Persist on every change. Best-effort — errors are swallowed inside
   // saveSourcePref so storage failures (Safari private mode, quota, etc.)
@@ -95,13 +97,25 @@ export function NexusTestbed() {
 
   const shockTarget = selectedId ?? DEFAULT_SHOCK_TARGET;
 
+  // publisher 기반 배지 — backend-live 모드에서만 세분화
+  const derivedSourceLabel = source === 'backend-live'
+    ? (healthLoading
+        ? SOURCE_LABEL['backend-live']
+        : publisher === 'kis'  ? 'KIS LIVE  ▴KRX'
+        : publisher === 'mock' ? 'BACKEND · MOCK'
+        :                        'NO SOURCE')
+    : SOURCE_LABEL[source];
+
+  const derivedSourceKind: 'remote' | 'local' =
+    source === 'backend-live' && publisher === 'kis' ? 'remote' : 'local';
+
   return (
     <App
       streamer={streamer}
       selectedId={selectedId}
       onSelectedChange={setSelectedId}
-      sourceLabel={SOURCE_LABEL[source]}
-      sourceKind={source === 'backend-live' ? 'remote' : 'local'}
+      sourceLabel={derivedSourceLabel}
+      sourceKind={derivedSourceKind}
       harnessSlot={
         <HarnessPanel
           source={source}
@@ -131,14 +145,14 @@ function HarnessPanel({
   const { t } = useLanguage();
   const fps = useFps();
   const fpsColor =
-    fps >= 55 ? '#00BFFF' : fps >= 40 ? '#FFB200' : '#DEFF9A';
+    fps >= 55 ? NEXUS_COLOR.cyan : fps >= 40 ? NEXUS_COLOR.amber : NEXUS_COLOR.lime;
 
   return (
     <div
       style={{
         padding: '12px 14px',
         background: 'transparent',
-        color: '#E8ECF5',
+        color: NEXUS_COLOR.bone,
         // Sprint 5s+ loop: was '"JetBrains Mono", monospace' — missing
         // the `ui-monospace` step every other HUD surface includes.
         // Normalized to FONT_MONO so the harness panel renders with
@@ -157,7 +171,7 @@ function HarnessPanel({
           marginBottom: 10,
         }}
       >
-        <div style={{ color: '#00BFFF', fontWeight: 600 }}>
+        <div style={{ color: NEXUS_COLOR.cyan, fontWeight: 600 }}>
           {t('harness.title')}
         </div>
         <div style={{ color: fpsColor }}>{t('harness.fps', { n: fps })}</div>
@@ -167,7 +181,7 @@ function HarnessPanel({
           path (real KRX+US ticks); OFFLINE·SIM is the fallback when the
           backend can't be reached. Two-button row, equal width. */}
       <div style={{ marginBottom: 10 }}>
-        <div style={{ color: '#8A93A8', marginBottom: 4 }}>{t('harness.source')}</div>
+        <div style={{ color: NEXUS_COLOR.ash, marginBottom: 4 }}>{t('harness.source')}</div>
         <div style={{ display: 'flex', gap: 4 }}>
           {SOURCES.map(s => {
             const active = s === source;
@@ -209,11 +223,11 @@ function HarnessPanel({
           alignItems: 'center',
           justifyContent: 'space-between',
           marginBottom: 6,
-          color: '#8A93A8',
+          color: NEXUS_COLOR.ash,
         }}
       >
         <span>{t('harness.frequency')}</span>
-        <span style={{ color: '#00BFFF' }}>{t('harness.freqUnit', { n: freq })}</span>
+        <span style={{ color: NEXUS_COLOR.cyan }}>{t('harness.freqUnit', { n: freq })}</span>
       </label>
       <input
         type="range"
@@ -222,7 +236,7 @@ function HarnessPanel({
         step={1}
         value={freq}
         onChange={e => onFreqChange(Number(e.target.value))}
-        style={{ width: '100%', accentColor: '#00BFFF', marginBottom: 12 }}
+        style={{ width: '100%', accentColor: NEXUS_COLOR.cyan, marginBottom: 12 }}
       />
 
       <button
@@ -234,8 +248,8 @@ function HarnessPanel({
           width: '100%',
           padding: '8px 10px',
           background: 'transparent',
-          color: '#DEFF9A',
-          border: '1px solid #DEFF9A',
+          color: NEXUS_COLOR.lime,
+          border: `1px solid ${NEXUS_COLOR.lime}`,
           borderRadius: 3,
           fontFamily: 'inherit',
           fontSize: 10,
@@ -253,7 +267,7 @@ function HarnessPanel({
         style={{
           marginTop: 10,
           fontSize: 9,
-          color: '#4A5066',
+          color: NEXUS_COLOR.low,
           lineHeight: 1.5,
         }}
       >
