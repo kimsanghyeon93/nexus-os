@@ -3,10 +3,13 @@
 
 import { useEffect, useState } from 'react';
 import { NEXUS_COLOR, withAlpha } from '../../styles/colors';
+import { FONT_MONO } from '../../styles/fonts';
+import { useBalance } from '../../hooks/useBalance';
 import type { ApiTelemetry, SsoSession } from '../../types/nexus';
 import type { ConnectionState } from '../../types/streamer';
 import { useLanguage, type Language } from '../../utils/i18n';
 import { getOperatorIdentity } from '../../utils/operator';
+import { BalanceModal } from './BalanceModal';
 
 interface SparklineProps {
   values: number[];
@@ -15,7 +18,7 @@ interface SparklineProps {
   h?: number;
 }
 
-function Sparkline({ values, color = '#00BFFF', w = 56, h = 14 }: SparklineProps) {
+function Sparkline({ values, color = NEXUS_COLOR.cyan, w = 56, h = 14 }: SparklineProps) {
   if (!values.length) return null;
   const max = Math.max(...values, 1);
   const pts = values
@@ -158,6 +161,16 @@ export function TopBar({
   // CommandCenter and a prop default here.
   const resolvedOperator = operator ?? getOperatorIdentity().topbar;
   const { lang, setLang, t } = useLanguage();
+  // Balance modal open/close state.
+  const [balanceOpen, setBalanceOpen] = useState(false);
+  // useBalance — 30s background poll runs unconditionally regardless of modal state.
+  const {
+    data:        balanceData,
+    loading:     balanceLoading,
+    error:       balanceError,
+    refresh:     balanceRefresh,
+    lastUpdated: balanceLastUpdated,
+  } = useBalance();
   // Renamed from `t` to `secs` to avoid collision with i18n's `t(...)`.
   const [secs, setSecs] = useState(0);
   useEffect(() => {
@@ -201,6 +214,44 @@ export function TopBar({
       </nav>
 
       <div className="nx-top__status">
+        {/* KIS Balance panel trigger */}
+        <button
+          type="button"
+          data-testid="topbar-balance-btn"
+          aria-label="Open balance panel"
+          onClick={() => setBalanceOpen(true)}
+          style={{
+            background:    balanceOpen ? withAlpha(NEXUS_COLOR.cyan, 0.18) : 'transparent',
+            color:         NEXUS_COLOR.cyan,
+            border:        `1px solid ${withAlpha(NEXUS_COLOR.cyan, 0.40)}`,
+            borderRadius:  2,
+            padding:       '2px 8px',
+            fontSize:      9,
+            letterSpacing: '0.10em',
+            cursor:        'pointer',
+            fontFamily:    FONT_MONO,
+            fontWeight:    600,
+            display:       'flex',
+            alignItems:    'center',
+            gap:           4,
+            transition:    'background 120ms cubic-bezier(0.2,0.8,0.2,1), box-shadow 120ms cubic-bezier(0.2,0.8,0.2,1)',
+            boxShadow:     balanceOpen ? `0 0 6px ${withAlpha(NEXUS_COLOR.cyan, 0.30)}` : 'none',
+          }}
+        >
+          BALANCE
+          {balanceData && balanceData.holdings.length > 0 && (
+            <span
+              style={{
+                color:         NEXUS_COLOR.cyan,
+                fontFamily:    FONT_MONO,
+                fontSize:      9,
+                letterSpacing: 0,
+              }}
+            >
+              [{balanceData.holdings.length}]
+            </span>
+          )}
+        </button>
         {/* Sprint 5s+ iter 10: language toggle */}
         <LangToggle lang={lang} setLang={setLang} t={t} />
         {/* Live API connection panel */}
@@ -245,6 +296,15 @@ export function TopBar({
         <div className="nx-mono" style={{ fontSize: 11, color: 'var(--cyan)' }}>{time}</div>
         <div className="nx-mono-dim" style={{ fontSize: 10 }}>{resolvedOperator}</div>
       </div>
+      <BalanceModal
+        open={balanceOpen}
+        onClose={() => setBalanceOpen(false)}
+        data={balanceData}
+        loading={balanceLoading}
+        error={balanceError}
+        refresh={balanceRefresh}
+        lastUpdated={balanceLastUpdated}
+      />
     </header>
   );
 }
@@ -276,7 +336,7 @@ function LangToggle({ lang, setLang, t: translate }: LangToggleProps) {
         border:       `0.6px solid ${withAlpha(NEXUS_COLOR.cyan, 0.30)}`,
         borderRadius: 2,
         overflow:     'hidden',
-        fontFamily:   '"JetBrains Mono", ui-monospace, monospace',
+        fontFamily:   FONT_MONO,
       }}
     >
       {(['en', 'ko'] as ReadonlyArray<Language>).map(L => {
