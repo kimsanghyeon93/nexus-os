@@ -299,6 +299,25 @@ export interface AlarmListDTO {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+//  /v1/stream WebSocket — Quote (H0STASP0 호가 5단계)
+// ──────────────────────────────────────────────────────────────────────
+
+export interface QuoteLevel {
+  price:  number;
+  volume: number;
+}
+
+/** 5-level order book snapshot from KIS H0STASP0.
+ *  Discriminated by `type === "quote"` in the WebSocket stream. */
+export interface Quote {
+  type:   'quote';
+  symbol: string;
+  ts:     string;           // ISO-8601
+  bids:   QuoteLevel[];     // [0] = best bid (highest price), len ≤ 5
+  asks:   QuoteLevel[];     // [0] = best ask (lowest price), len ≤ 5
+}
+
+// ──────────────────────────────────────────────────────────────────────
 //  /v1/health — publisher source indicator
 // ──────────────────────────────────────────────────────────────────────
 

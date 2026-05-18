@@ -62,6 +62,11 @@ export interface IMarketStreamer {
   onTelemetry(cb: (t: TelemetrySample) => void): Unsubscribe;
   onAnomaly(cb: (e: AnomalyEvent) => void): Unsubscribe;
 
+  /** Subscribe to order-book quote updates (H0STASP0).
+   *  Optional — streamers that don't produce quotes (MockStreamer)
+   *  implement a no-op stub. */
+  onQuote?: (cb: (q: import('./api').Quote) => void) => Unsubscribe;
+
   /** Current transport state. Read-only snapshot — subscribe via
    *  onConnectionStateChange for live updates. */
   readonly connectionState: ConnectionState;

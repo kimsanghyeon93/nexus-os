@@ -136,6 +136,10 @@ export class MockStreamer implements IMarketStreamer {
     return () => this.anomalySubs.delete(cb);
   }
 
+  onQuote(_cb: (q: import('../types/api').Quote) => void): Unsubscribe {
+    return () => {};
+  }
+
   private scheduleEmitter(): void {
     const intervalMs = Math.max(2, Math.round(1000 / this.freq));
     this.packetTimer = setInterval(() => this.emit(), intervalMs);
