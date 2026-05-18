@@ -10,6 +10,7 @@ import type { ConnectionState } from '../../types/streamer';
 import { useLanguage, type Language } from '../../utils/i18n';
 import { getOperatorIdentity } from '../../utils/operator';
 import { BalanceModal } from './BalanceModal';
+import { OrderModal } from './OrderModal';
 
 interface SparklineProps {
   values: number[];
@@ -163,6 +164,7 @@ export function TopBar({
   const { lang, setLang, t } = useLanguage();
   // Balance modal open/close state.
   const [balanceOpen, setBalanceOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
   // useBalance — 30s background poll runs unconditionally regardless of modal state.
   const {
     data:        balanceData,
@@ -214,6 +216,29 @@ export function TopBar({
       </nav>
 
       <div className="nx-top__status">
+        {/* KIS Order Entry trigger */}
+        <button
+          type="button"
+          data-testid="topbar-order-btn"
+          aria-label="Open order entry"
+          onClick={() => setOrderOpen(true)}
+          style={{
+            background:    orderOpen ? withAlpha(NEXUS_COLOR.cyan, 0.18) : 'transparent',
+            color:         NEXUS_COLOR.cyan,
+            border:        `1px solid ${withAlpha(NEXUS_COLOR.cyan, 0.40)}`,
+            borderRadius:  2,
+            padding:       '2px 8px',
+            fontSize:      9,
+            letterSpacing: '0.10em',
+            cursor:        'pointer',
+            fontFamily:    FONT_MONO,
+            fontWeight:    600,
+            transition:    'background 120ms cubic-bezier(0.2,0.8,0.2,1), box-shadow 120ms cubic-bezier(0.2,0.8,0.2,1)',
+            boxShadow:     orderOpen ? `0 0 6px ${withAlpha(NEXUS_COLOR.cyan, 0.30)}` : 'none',
+          }}
+        >
+          ORDER
+        </button>
         {/* KIS Balance panel trigger */}
         <button
           type="button"
@@ -305,6 +330,7 @@ export function TopBar({
         refresh={balanceRefresh}
         lastUpdated={balanceLastUpdated}
       />
+      <OrderModal open={orderOpen} onClose={() => setOrderOpen(false)} />
     </header>
   );
 }
