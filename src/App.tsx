@@ -18,6 +18,8 @@ import { KisLiveSnapshot } from './components/HUD/KisLiveSnapshot';
 import { TapePanel } from './components/HUD/TapePanel';
 import { VolumeHistogram } from './components/HUD/VolumeHistogram';
 import { SystemHealthPanel } from './components/HUD/SystemHealthPanel';
+import { AlarmPanel } from './components/HUD/AlarmPanel';
+import { OrderBookPanel } from './components/HUD/OrderBookPanel';
 import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
 import { NEXUS_COLOR, NEXUS_SURFACE, withAlpha } from './styles/colors';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
@@ -65,7 +67,7 @@ export default function App({
   const {
     dataset, telemetry, sso, shockTarget, connectionState,
     isReplaying, isDiffing, diffMap, diffEdgeMap, liveEntityIds,
-    replayDataset, diffSnapshot, resumeLive,
+    replayDataset, diffSnapshot, resumeLive, quoteMap,
   } = useMarketData(streamer);
   const { ENTITIES, TX, CLUSTERS } = dataset;
 
@@ -514,6 +516,8 @@ export default function App({
     [ENTITIES, selectedId],
   );
 
+  const selectedQuote = selectedId != null ? (quoteMap.get(selectedId) ?? null) : null;
+
   // Sprint 5p-D KisLiveSnapshot inputs. The panel needs both the
   // KIS-traded symbol universe (entity.type === 'kr_equity' from the
   // dataset matches the backend's KIS_SUBSCRIBE_SYMBOLS env list) AND
@@ -627,11 +631,22 @@ export default function App({
           </button>
           <div className="nx-app__right-content">
             <div className="nx-app__right-main">
+              {/* Operator alarms panel — mounted at the top of the right
+                  HUD column per spec §4 (highest visual priority for
+                  operator triage). Polls /v1/alarms at 4s; renders the
+                  7 state branches inline (initial/loading-refresh/
+                  ok-stream/ok-empty/error-network/error-auth/error-
+                  other). */}
+              <AlarmPanel />
               <PropertyHUD
                 entity={selected}
                 transactions={TX}
                 onSelect={setSelectedId}
                 diffMap={diffMap}
+              />
+              <OrderBookPanel
+                symbol={selectedId}
+                quote={selectedQuote}
               />
               <SystemHealthPanel />
               <KisLiveSnapshot
