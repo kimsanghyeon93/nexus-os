@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { NEXUS_COLOR, NEXUS_SURFACE, withAlpha } from '../../styles/colors';
 import { FONT_MONO } from '../../styles/fonts';
 import { useOrder } from '../../hooks/useOrder';
-import type { OrderRequestDTO } from '../../types/api';
+import type { OrderRequestDTO, PublisherKind } from '../../types/api';
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -16,14 +16,13 @@ interface OrderModalProps {
 type Step = 'input' | 'confirm' | 'result';
 type Action = 'buy' | 'sell';
 type OrderType = 'market' | 'limit';
-type PublisherKind = 'kis' | 'mock' | 'none';
 
 // ── Styles (module-level constants) ────────────────────────────────────────
 
 const OVERLAY: React.CSSProperties = {
   position:        'fixed',
   inset:           0,
-  background:      'rgba(0,0,0,0.55)',
+  background:      NEXUS_SURFACE.backdrop,
   display:         'flex',
   alignItems:      'center',
   justifyContent:  'center',
@@ -198,12 +197,6 @@ function OrderModalInner({ onClose }: InnerProps) {
     return () => { cancelled = true; };
   }, []);
 
-  // ESC closes modal
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
 
   // Sync result phase → step
   useEffect(() => {
@@ -236,6 +229,13 @@ function OrderModalInner({ onClose }: InnerProps) {
     setStep('input');
     onClose();
   }, [reset, onClose]);
+
+  // ESC closes modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleClose]);
 
   // ── Step: input ──────────────────────────────────────────────────────
 
