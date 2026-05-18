@@ -20,6 +20,7 @@ import type {
   SsoSession,
 } from '../types/nexus';
 import type { ConnectionState, IMarketStreamer } from '../types/streamer';
+import type { Quote } from '../types/api';
 import { computeDiff, type EntityDelta } from '../utils/diff';
 
 export type EdgeDiffKind = 'new' | 'broken';
@@ -525,6 +526,9 @@ export interface UseMarketDataResult {
    *  random subsets on synthetic sources). Refresh cadence is 1Hz
    *  regardless of tick rate to keep React renders bounded. */
   liveEntityIds: ReadonlySet<string>;
+  /** Latest order-book snapshot per symbol. Updated on every onQuote callback.
+   *  Empty map when streamer has no onQuote (MockStreamer) or no quotes received yet. */
+  quoteMap: ReadonlyMap<string, Quote>;
   /** Swap the active dataset to a dropped snapshot and pause the streamer. */
   replayDataset: (next: NexusDataset) => void;
   /** Compare the dropped snapshot against live without swapping the dataset.
@@ -558,6 +562,8 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
 
   const shockNonceRef = useRef(0);
   const [shockTarget, setShockTarget] = useState<ShockSignal | null>(null);
+
+  const [quoteMap, setQuoteMap] = useState<Map<string, Quote>>(new Map());
 
   // Sprint 5p-B: per-entity last-tick timestamp ledger. Mutated on every
   // incoming packet (cheap, no React update) and read by a 1s sweep that
@@ -625,6 +631,14 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
         setShockTarget({ id: targetId, nonce: shockNonceRef.current });
       });
 
+      const offQuote = streamer.onQuote?.((q) => {
+        setQuoteMap(prev => {
+          const next = new Map(prev);
+          next.set(q.symbol, q);
+          return next;
+        });
+      });
+
       // Sync the local mirror to the streamer's current state at subscribe time
       // (start() may have already fired before our effect ran), then track live.
       setStreamerState(streamer.connectionState);
@@ -634,6 +648,7 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
         offPacket();
         offTelemetry();
         offAnomaly();
+        offQuote?.();
         offConn();
       };
     }
@@ -833,6 +848,7 @@ export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
     diffMap,
     diffEdgeMap,
     liveEntityIds,
+    quoteMap,
     replayDataset,
     diffSnapshot,
     resumeLive,
