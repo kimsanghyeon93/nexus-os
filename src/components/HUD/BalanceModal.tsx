@@ -152,7 +152,7 @@ function BalanceModalInner({
           {loading && data === null && <LoadingState />}
 
           {/* Branch 2: error */}
-          {error !== null && (
+          {error !== null && !loading && (
             <ErrorState error={error} onRetry={refresh} />
           )}
 
@@ -165,18 +165,15 @@ function BalanceModalInner({
                   <SummaryCard
                     label="예수금"
                     value={summary.cash}
-                    unit="KRW"
                   />
                   <SummaryCard
                     label="총평가금액"
                     value={summary.eval_total}
-                    unit="KRW"
                   />
                   <SummaryCard
                     label="총손익"
                     value={summary.profit_loss}
                     pct={summary.profit_loss_pct}
-                    unit="KRW"
                     colored
                   />
                 </div>
@@ -272,7 +269,6 @@ interface SummaryCardProps {
   label:   string;
   value:   number;
   pct?:    number;
-  unit?:   string;
   /** If true, value is colored by profit/loss sign */
   colored?: boolean;
 }
@@ -362,7 +358,7 @@ function ElapsedLabel({ lastUpdated }: ElapsedLabelProps) {
     return () => {
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
     };
-  }, []);
+  }, [lastUpdated]);
 
   if (lastUpdated === null) return null;
 
