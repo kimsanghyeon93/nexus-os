@@ -56,10 +56,11 @@ export class BackendStreamer implements IMarketStreamer {
   private freq:      number = 1;       // Hz — accepted but ignored (backend owns cadence)
   private _state:    ConnectionState   = 'disconnected';
 
-  private packetSubs:    Set<(p: MarketPacket) => void>     = new Set();
-  private telemetrySubs: Set<(t: TelemetrySample) => void>  = new Set();
-  private anomalySubs:   Set<(e: AnomalyEvent) => void>     = new Set();
-  private stateSubs:     Set<(s: ConnectionState) => void>  = new Set();
+  private packetSubs:    Set<(p: MarketPacket) => void>                          = new Set();
+  private quoteSubs:     Set<(q: import('../types/api').Quote) => void>          = new Set();
+  private telemetrySubs: Set<(t: TelemetrySample) => void>                      = new Set();
+  private anomalySubs:   Set<(e: AnomalyEvent) => void>                         = new Set();
+  private stateSubs:     Set<(s: ConnectionState) => void>                      = new Set();
 
   // Telemetry accumulators — packets-per-second is computed on a 1s timer
   // rather than every-message to match the existing streamers' cadence.
@@ -103,6 +104,13 @@ export class BackendStreamer implements IMarketStreamer {
     };
 
     socket.onmessage = (ev: MessageEvent) => {
+      // Try quote first (discriminated by type === 'quote').
+      const quote = this.parseQuote(ev.data);
+      if (quote !== null) {
+        for (const cb of this.quoteSubs) cb(quote);
+        return;
+      }
+      // Fall back to tick.
       const tick = this.parseTick(ev.data);
       if (tick === null) return;
       this.pktCounter += 1;
@@ -182,6 +190,11 @@ export class BackendStreamer implements IMarketStreamer {
     return () => { this.anomalySubs.delete(cb); };
   }
 
+  onQuote(cb: (q: import('../types/api').Quote) => void): Unsubscribe {
+    this.quoteSubs.add(cb);
+    return () => { this.quoteSubs.delete(cb); };
+  }
+
   get connectionState(): ConnectionState {
     return this._state;
   }
@@ -210,6 +223,19 @@ export class BackendStreamer implements IMarketStreamer {
     if (typeof t.ts     !== 'string') return null;
     if (t.side !== 'buy' && t.side !== 'sell') return null;
     return t as BackendTick;
+  }
+
+  private parseQuote(raw: unknown): import('../types/api').Quote | null {
+    if (typeof raw !== 'string') return null;
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { return null; }
+    if (!parsed || typeof parsed !== 'object') return null;
+    const q = parsed as Record<string, unknown>;
+    if (q['type'] !== 'quote') return null;
+    if (typeof q['symbol'] !== 'string') return null;
+    if (typeof q['ts']     !== 'string') return null;
+    if (!Array.isArray(q['bids']) || !Array.isArray(q['asks'])) return null;
+    return q as unknown as import('../types/api').Quote;
   }
 
   private setState(next: ConnectionState): void {
