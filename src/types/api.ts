@@ -331,6 +331,56 @@ export interface HealthDTO {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+//  /v1/balance — KIS Balance Panel (holding summary & detail)
+// ──────────────────────────────────────────────────────────────────────
+
+export interface HoldingDTO {
+  symbol:          string;
+  name:            string;
+  quantity:        number;
+  avg_price:       number;
+  current_price:   number;
+  eval_amount:     number;
+  profit_loss:     number;
+  profit_loss_pct: number;
+}
+
+export interface BalanceSummaryDTO {
+  cash:            number;
+  eval_total:      number;
+  profit_loss:     number;
+  profit_loss_pct: number;
+}
+
+export interface BalanceDTO {
+  summary:   BalanceSummaryDTO;
+  holdings:  HoldingDTO[];
+  ts:        string;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  /v1/order — Manual Order Entry
+// ──────────────────────────────────────────────────────────────────────
+
+export interface OrderRequestDTO {
+  symbol:     string;
+  action:     'buy' | 'sell';
+  quantity:   number;
+  order_type: 'market' | 'limit';
+  price:      number;   // 0 = 시장가
+}
+
+export interface OrderResponseDTO {
+  order_id: string;
+  symbol:   string;
+  action:   string;
+  quantity: number;
+  status:   'accepted' | 'rejected';
+  message:  string;
+  ts:       string;
+}
+
+// ──────────────────────────────────────────────────────────────────────
 //  ApiResult — discriminated union the wrapper returns
 // ──────────────────────────────────────────────────────────────────────
 
