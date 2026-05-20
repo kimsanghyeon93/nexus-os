@@ -96,10 +96,19 @@ function EntityCard({ entity, transactions, onSelect, delta }: EntityCardProps) 
 
       <div className="nx-prop__name">
         <div className="nx-mono" style={{ fontSize: 13, color: 'var(--fg)' }}>
-          {entity.label}
+          {/* Sprint 5s+ — single source of truth for the operator-
+              facing label. `display_name` is set by the securities
+              overlay; legacy ontology nodes still fall through to
+              `label`. */}
+          {entity.display_name ?? entity.label}
         </div>
         <div className="nx-mono-dim" style={{ fontSize: 10 }}>
-          {entity.type.replace(/_/g, ' ').toUpperCase()} · {entity.jurisdiction}
+          {/* Securities rows render `{ticker} · {market} · {sector_label}`
+              per spec §4.1 PropertyHUD pattern. Legacy ontology rows
+              fall back to the type/jurisdiction line. */}
+          {entity.ticker
+            ? `${entity.ticker}${entity.market ? ` · ${entity.market}` : ''}${entity.sectorLabel ? ` · ${entity.sectorLabel}` : ''}`
+            : `${entity.type.replace(/_/g, ' ').toUpperCase()} · ${entity.jurisdiction}`}
         </div>
       </div>
 

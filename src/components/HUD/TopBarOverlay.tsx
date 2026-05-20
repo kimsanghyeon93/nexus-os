@@ -203,7 +203,10 @@ function InvestigationsBody({ entities, onEntitySelect }: TopBarOverlayProps) {
               {e.id}
             </span>
             <span style={{ color: COLOR.ash, fontSize: 10, flex: 1 }}>
-              {e.label}
+              {/* Sprint 5s+ — prefer display_name from the securities
+                  master when it's been merged onto the entity. Legacy
+                  ontology nodes keep their hardcoded label. */}
+              {e.display_name ?? e.label}
             </span>
             <span style={{ color: COLOR.ash, fontSize: 9, letterSpacing: '0.08em', minWidth: 60 }}>
               {e.cluster}

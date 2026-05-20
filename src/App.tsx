@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMarketData } from './hooks/useMarketData';
+import { useSecurities } from './hooks/useSecurities';
 import { TopBar, type TopBarTab } from './components/HUD/TopBar';
 import { TopBarOverlay } from './components/HUD/TopBarOverlay';
 import { CommandCenter } from './components/HUD/CommandCenter';
@@ -21,7 +22,10 @@ import { SystemHealthPanel } from './components/HUD/SystemHealthPanel';
 import { AlarmPanel } from './components/HUD/AlarmPanel';
 import { OrderBookPanel } from './components/HUD/OrderBookPanel';
 import { RadarCanvas, type RadarCanvasHandle } from './components/Graph/RadarCanvas';
+import { GraphModeToggle, type GraphMode } from './components/HUD/GraphModeToggle';
+import { SecuritiesSidebar, fuzzyScoreSecurity } from './components/HUD/SecuritiesSidebar';
 import { NEXUS_COLOR, NEXUS_SURFACE, withAlpha } from './styles/colors';
+import type { SecurityMarket } from './types/api';
 import { parseSnapshotPayload, prepareSnapshot, triggerDownload, type SnapshotEntry } from './utils/snapshot';
 import { summarizeDiff, type DiffFilter } from './utils/diff';
 import { loadLayoutPref, saveLayoutPref, loadTourSeen, saveTourSeen } from './utils/persistence';
@@ -64,14 +68,60 @@ export default function App({
   selectedId: controlledSelectedId, onSelectedChange,
   sourceLabel, sourceKind,
 }: AppProps = {}) {
+  // Sprint 5s+ — Securities master + relations (60s poll). Merges real data
+  // onto the live ontology dataset via useMarketData's options channel.
+  const {
+    securities: secData,
+    relations,
+    stale: secStale,
+    loading: secLoading,
+    serverTime: secServerTime,
+  } = useSecurities();
+
   const {
     dataset, telemetry, sso, shockTarget, connectionState,
     isReplaying, isDiffing, diffMap, diffEdgeMap, liveEntityIds,
     replayDataset, diffSnapshot, resumeLive, quoteMap,
-  } = useMarketData(streamer);
+  } = useMarketData(streamer, { securities: secData, relations });
   const { ENTITIES, TX, CLUSTERS } = dataset;
 
   const [view] = useState<GraphViewConfig>(DEFAULT_VIEW);
+
+  // Sprint 5s+ — graph mode (ontology = legacy radar, securities = Obsidian).
+  const [graphMode, setGraphMode] = useState<GraphMode>('ontology');
+
+  // Read once on mount — media query rarely changes mid-session.
+  const reducedMotion = useMemo(
+    () => typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false,
+    [],
+  );
+
+  // Securities sidebar filter state. Callbacks are stable refs so the
+  // sidebar doesn't re-render on unrelated App state changes.
+  const [secSearch,  setSecSearch]  = useState('');
+  const [secSectors, setSecSectors] = useState<ReadonlySet<string>>(new Set());
+  const [secMarkets, setSecMarkets] = useState<ReadonlySet<SecurityMarket>>(new Set());
+
+  // Matched securities count for the sidebar counter chip.
+  const matchedSecCount = useMemo(() => {
+    if (secData.length === 0) return 0;
+    return secData.filter(s => {
+      if (secSectors.size > 0 && !secSectors.has(s.sector)) return false;
+      if (secMarkets.size > 0 && !secMarkets.has(s.market)) return false;
+      if (secSearch) return fuzzyScoreSecurity(s, secSearch) >= 0.5;
+      return true;
+    }).length;
+  }, [secData, secSearch, secSectors, secMarkets]);
+
+  // Human-readable stale age for the ◆ STALE chip.
+  const secStaleAge = useMemo((): string => {
+    if (!secServerTime) return '';
+    const diffMs = Date.now() - Date.parse(secServerTime);
+    const h = Math.floor(diffMs / 3_600_000);
+    return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+  }, [secServerTime]);
 
   // Symmetric column collapse — both flags lazy-init from a single layout pref
   // payload, so reload restores the operator's exact war-room geometry.
@@ -593,29 +643,91 @@ export default function App({
             {isLeftColumnCollapsed ? '▸' : '◂'}
           </button>
           <div className="nx-app__left-content">
+            {/* Sprint 5s+ — mode switcher lives above CommandCenter so the
+                operator can flip graph mode without leaving the left rail. */}
+            <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+              <GraphModeToggle value={graphMode} onChange={setGraphMode} />
+            </div>
             <CommandCenter status="LISTENING" onCommand={handleCommand} />
+            {/* Securities search + filter — only visible in SECURITIES mode. */}
+            {graphMode === 'securities' && (
+              <SecuritiesSidebar
+                securities={secData}
+                onSearchChange={setSecSearch}
+                onSectorsChange={setSecSectors}
+                onMarketsChange={setSecMarkets}
+                matchedCount={matchedSecCount}
+              />
+            )}
           </div>
         </div>
 
-        <RadarCanvas
-          ref={radarRef}
-          entities={ENTITIES}
-          transactions={TX}
-          clusters={CLUSTERS}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          glowIntensity={view.glowIntensity}
-          dataDensity={view.dataDensity}
-          edgeMode={view.edgeMode}
-          showFlow={view.showFlow}
-          centralityMode={view.centrality}
-          diffEdgeMap={diffEdgeMap}
-          diffMap={diffMap}
-          diffFilter={diffFilter}
-          isolatedId={isolatedId}
-          tracedId={tracedId}
-          liveEntityIds={liveEntityIds}
-        />
+        {/* Sprint 5s+ canvas wrapper — carries stale + empty overlays.
+            flex: '1 1 0' + min-width:0 mirrors the RadarCanvas's own
+            nx-radar-canvas flex behaviour so the column geometry is
+            unchanged when the wrapper is present. */}
+        <div style={{ position: 'relative', flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <RadarCanvas
+            ref={radarRef}
+            entities={ENTITIES}
+            transactions={TX}
+            clusters={CLUSTERS}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            glowIntensity={view.glowIntensity}
+            dataDensity={view.dataDensity}
+            edgeMode={view.edgeMode}
+            showFlow={view.showFlow}
+            centralityMode={view.centrality}
+            diffEdgeMap={diffEdgeMap}
+            diffMap={diffMap}
+            diffFilter={diffFilter}
+            isolatedId={isolatedId}
+            tracedId={tracedId}
+            liveEntityIds={liveEntityIds}
+            mode={graphMode}
+            reducedMotion={reducedMotion}
+          />
+          {/* ◆ STALE chip — amber, top-left of canvas, securities mode only. */}
+          {graphMode === 'securities' && secStale && (
+            <div
+              aria-live="polite"
+              style={{
+                position: 'absolute',
+                top: '8px',
+                left: '8px',
+                font: 'var(--type-label)',
+                letterSpacing: 'var(--track-label)',
+                textTransform: 'uppercase',
+                color: 'var(--amber)',
+                pointerEvents: 'none',
+                zIndex: 10,
+              }}
+            >
+              {`◆ STALE · ${secStaleAge}`}
+            </div>
+          )}
+          {/* NO SECURITIES overlay — blank canvas guard. */}
+          {graphMode === 'securities' && !secLoading && secData.length === 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                font: 'var(--type-label)',
+                letterSpacing: 'var(--track-label)',
+                textTransform: 'uppercase',
+                color: 'var(--fg-dim)',
+                pointerEvents: 'none',
+                zIndex: 10,
+              }}
+            >
+              NO SECURITIES IN UNIVERSE — check data source.
+            </div>
+          )}
+        </div>
 
         <div className="nx-app__right">
           <button

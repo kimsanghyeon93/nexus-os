@@ -83,6 +83,25 @@ function nodeAccentColor(n: NexusEntity): string {
   return COLOR.cyan;
 }
 
+/** Sprint 5s+ — accent picker for the Obsidian-style securities mode.
+ *  Anomaly stays the dominant signal (lime override) per spec §4.6, but
+ *  the everyday color is driven by `changePct` so the operator's eye
+ *  reads "up vs down" at a glance:
+ *    > 0  → lime    (matches the change-pct text color rule)
+ *    < 0  → amber
+ *    ≈ 0  → cyan
+ *  Nodes without `changePct` data (the residual non-security ontology)
+ *  fall through to the legacy nodeAccentColor pick. */
+function nodeAccentColorSecurities(n: NexusEntity): string {
+  if (n.anomaly > 0.7) return COLOR.lime;
+  if (typeof n.changePct === 'number') {
+    if (n.changePct > 0.05)  return COLOR.lime;
+    if (n.changePct < -0.05) return COLOR.amber;
+    return COLOR.cyan;
+  }
+  return nodeAccentColor(n);
+}
+
 // Sprint 5s+ loop iteration: was a local hexToRgba that duplicated the
 // logic in src/styles/colors.ts:withAlpha. Removed in favor of the
 // shared helper — every consumer in the canvas reads via withAlpha now.
@@ -147,6 +166,24 @@ export interface RadarCanvasProps {
    * ring breathes via sin(t·π) ∈ [0.4, 1.0] so a static screenshot
    * still reads "this one's alive". Empty set = no pulse rendered. */
   liveEntityIds?: ReadonlySet<string>;
+  /** Sprint 5s+ — graph rendering mode. `ontology` keeps the legacy
+   *  Palantir-style radar sweep + cluster-anchor layout. `securities`
+   *  switches to an Obsidian-style view:
+   *    - polar radar sweep disabled (sweepRef no-op)
+   *    - node size mapped from log10(market_cap) when the node carries
+   *      `marketCap`, otherwise the legacy centrality-based ramp
+   *    - node accent picked from `changePct` (lime>0, amber<0, cyan≈0;
+   *      lime override when anomaly>0.7 preserved)
+   *    - `sector` edges shown at full alpha, `inter` (correlation)
+   *      edges dimmed to 0.10 unless an endpoint is hovered/selected
+   *  The default is 'ontology' so existing callers see no behavior
+   *  change. */
+  mode?: 'ontology' | 'securities';
+  /** Sprint 5s+ — when true, sweep / breathing / particle animations
+   *  are zeroed and dim transitions snap immediately. Parent typically
+   *  reads `window.matchMedia('(prefers-reduced-motion: reduce)').matches`
+   *  and forwards the result. */
+  reducedMotion?: boolean;
 }
 
 function RadarCanvasInner({
@@ -161,6 +198,8 @@ function RadarCanvasInner({
   isolatedId  = null,
   tracedId    = null,
   liveEntityIds,
+  mode          = 'ontology',
+  reducedMotion = false,
 }: RadarCanvasProps, ref: React.Ref<RadarCanvasHandle>) {
   const { t } = useLanguage();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -451,6 +490,16 @@ function RadarCanvasInner({
     // bigger than a sector ETF — the visual hierarchy stays stable
     // through anomaly storms.
     if (n.isHub) return 18 + (n.eigen || 0) * 14;
+    // Securities mode: scale by log10(market_cap). Anchor at 1e11
+    // (≈ 100B local currency) so a typical KOSPI large-cap reads as
+    // ~11 (= log10(1e11)), and ceiling at 32 to keep mega-caps from
+    // dominating the canvas. Fall back to legacy sizing for nodes
+    // that don't carry market_cap (the residual non-security ontology).
+    if (mode === 'securities' && typeof n.marketCap === 'number') {
+      const mc = n.marketCap > 0 ? n.marketCap : 1e11;
+      const r  = Math.log10(mc);
+      return Math.max(4, Math.min(18, r - 4));
+    }
     const isSector = n.type === 'equity_sector' || n.type === 'central_bank';
     const base    = isSector ? 9 : 4;
     const ceiling = isSector ? 16 : 11;
@@ -459,7 +508,7 @@ function RadarCanvasInner({
     else if (centralityMode === 'degree') bonus = Math.min(10, (n.degree || 0) * 1.4);
     else if (centralityMode === 'volume') bonus = Math.min(12, Math.sqrt(n.txVol) * 0.30);
     return Math.min(ceiling, base + bonus);
-  }, [centralityMode]);
+  }, [centralityMode, mode]);
 
   const hitTest = useCallback((screenX: number, screenY: number): string | null => {
     const sim = simRef.current;
@@ -603,9 +652,17 @@ function RadarCanvasInner({
       const dt = Math.min(0.04, (now - last) / 1000);
       last = now;
       tRef.current += dt;
-      sweepRef.current = (sweepRef.current + dt / 6.0) % 1; // 6s revolution
+      // Sprint 5s+ — securities mode + reduced-motion both zero the
+      // radar sweep. We still advance `t` for selection-cascade timing
+      // because those are state transitions, not idle motion.
+      const sweepEnabled = mode === 'ontology' && !reducedMotion;
+      if (sweepEnabled) {
+        sweepRef.current = (sweepRef.current + dt / 6.0) % 1; // 6s revolution
+      }
       const t = tRef.current;
-      const sweepAngle = sweepRef.current * Math.PI * 2 - Math.PI / 2;
+      const sweepAngle = sweepEnabled
+        ? sweepRef.current * Math.PI * 2 - Math.PI / 2
+        : -Math.PI / 2;
 
       const dpr = dprRef.current;
       const W = size.w, H = size.h;
@@ -634,13 +691,18 @@ function RadarCanvasInner({
         sim.initialized = true;
       }
 
-      // Ambient breathing
-      sim.nodes.forEach((n, i) => {
-        if (n.isHub) return;
-        const phase = i * 0.7 + t * 0.4;
-        n.vx += Math.cos(phase) * 0.6;
-        n.vy += Math.sin(phase * 1.13) * 0.6;
-      });
+      // Ambient breathing — disabled in reducedMotion mode so the layout
+      // settles statically. Securities mode keeps a softer breathing
+      // because the obsidian-style layout looks too rigid otherwise.
+      if (!reducedMotion) {
+        const breath = mode === 'securities' ? 0.25 : 0.6;
+        sim.nodes.forEach((n, i) => {
+          if (n.isHub) return;
+          const phase = i * 0.7 + t * 0.4;
+          n.vx += Math.cos(phase) * breath;
+          n.vy += Math.sin(phase * 1.13) * breath;
+        });
+      }
 
       // Spring to anchor. Sprint 5s+: skip the dragging node so its
       // position is exclusively controlled by the cursor while the
@@ -875,7 +937,7 @@ function RadarCanvasInner({
       // ticking edges glow. Hubs, synthetic AML watch targets, and
       // anything else without a backend tick stream show no flow
       // unless one of their endpoints is live.
-      if (showFlow) {
+      if (showFlow && !reducedMotion) {
         ctx.globalCompositeOperation = 'lighter';
         const hasLive = liveEntityIds && liveEntityIds.size > 0;
         for (let i = 0; i < visibleTx.length; i++) {
@@ -934,40 +996,45 @@ function RadarCanvasInner({
         ctx.globalCompositeOperation = 'source-over';
       }
 
-      // Polar radar sweep
+      // Polar radar sweep — disabled in securities mode and when the
+      // user requested reduced motion. The center dot + range rings
+      // (static geometry) are also skipped because their visual sense
+      // depends on the sweep arm presence.
       const ccx = W / 2, ccy = H / 2;
-      const sweepR = Math.hypot(W, H) / 2 + 40;
-      const wedgeWidth = Math.PI / 5;
-      const steps = 28;
-      for (let s = 0; s < steps; s++) {
-        const t0 = s / steps;
-        const t1 = (s + 1) / steps;
-        const a0 = sweepAngle - wedgeWidth * (1 - t0);
-        const a1 = sweepAngle - wedgeWidth * (1 - t1);
-        const alpha = t0 * t0 * 0.10;
-        ctx.fillStyle = withAlpha(COLOR.cyan, alpha);
+      if (sweepEnabled) {
+        const sweepR = Math.hypot(W, H) / 2 + 40;
+        const wedgeWidth = Math.PI / 5;
+        const steps = 28;
+        for (let s = 0; s < steps; s++) {
+          const t0 = s / steps;
+          const t1 = (s + 1) / steps;
+          const a0 = sweepAngle - wedgeWidth * (1 - t0);
+          const a1 = sweepAngle - wedgeWidth * (1 - t1);
+          const alpha = t0 * t0 * 0.10;
+          ctx.fillStyle = withAlpha(COLOR.cyan, alpha);
+          ctx.beginPath();
+          ctx.moveTo(ccx, ccy);
+          ctx.arc(ccx, ccy, sweepR, a0, a1);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.strokeStyle = withAlpha(COLOR.cyan, 0.55);
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo(ccx, ccy);
-        ctx.arc(ccx, ccy, sweepR, a0, a1);
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.strokeStyle = withAlpha(COLOR.cyan, 0.55);
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(ccx, ccy);
-      ctx.lineTo(ccx + Math.cos(sweepAngle) * sweepR, ccy + Math.sin(sweepAngle) * sweepR);
-      ctx.stroke();
-      ctx.fillStyle = withAlpha(COLOR.cyan, 0.6);
-      ctx.beginPath();
-      ctx.arc(ccx, ccy, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = withAlpha(COLOR.cyan, 0.06);
-      ctx.lineWidth = 1;
-      for (const rr of [W * 0.18, W * 0.32, W * 0.46]) {
-        ctx.beginPath();
-        ctx.arc(ccx, ccy, rr, 0, Math.PI * 2);
+        ctx.lineTo(ccx + Math.cos(sweepAngle) * sweepR, ccy + Math.sin(sweepAngle) * sweepR);
         ctx.stroke();
+        ctx.fillStyle = withAlpha(COLOR.cyan, 0.6);
+        ctx.beginPath();
+        ctx.arc(ccx, ccy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = withAlpha(COLOR.cyan, 0.06);
+        ctx.lineWidth = 1;
+        for (const rr of [W * 0.18, W * 0.32, W * 0.46]) {
+          ctx.beginPath();
+          ctx.arc(ccx, ccy, rr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       const angDist = (a: number, b: number): number => {
@@ -978,11 +1045,12 @@ function RadarCanvasInner({
 
       // Halos
       ctx.globalCompositeOperation = 'lighter';
+      const pickAccent = mode === 'securities' ? nodeAccentColorSecurities : nodeAccentColor;
       for (const n of sim.nodes) {
         const r = radiusOf(n.ref);
         const isSel = n.id === selectedId;
         const isHover = n.id === hoverId;
-        const accent = nodeAccentColor(n.ref);
+        const accent = pickAccent(n.ref);
         const isAnomaly = n.ref.anomaly > 0.7;
         const nodeAng = Math.atan2(n.y - ccy, n.x - ccx);
         const ad = angDist(nodeAng, sweepAngle);
@@ -1006,10 +1074,16 @@ function RadarCanvasInner({
         const r = radiusOf(n.ref);
         const isSel = n.id === selectedId;
         const isHover = n.id === hoverId;
-        const accent = nodeAccentColor(n.ref);
+        const accent = pickAccent(n.ref);
         const dim = entityDim(n.id);
 
-        ctx.globalAlpha = dim;
+        // D2: estimated/static_master nodes render semi-transparent + dashed
+        const ds = n.ref.dataSource;
+        const isEstimated = ds === 'estimated';
+        const isPending   = ds === 'static_master';
+        const pendingAlpha = isEstimated ? 0.5 : isPending ? 0.35 : 1.0;
+
+        ctx.globalAlpha = dim * pendingAlpha;
         ctx.fillStyle = COLOR.void;
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
 
@@ -1017,14 +1091,18 @@ function RadarCanvasInner({
         ctx.lineWidth = isSel ? 1.6 : (isHover ? 1.3 : (n.isHub ? 1.4 : 1.0));
         ctx.shadowColor = accent;
         ctx.shadowBlur = (isSel ? 12 : (isHover ? 10 : 6)) * glowIntensity;
+        // dashed border: [dash, gap] — estimated uses a loose dash, pending uses a fine dot
+        if (isEstimated) ctx.setLineDash([4, 4]);
+        else if (isPending) ctx.setLineDash([2, 5]);
         ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
 
         if (n.isHub) {
           ctx.shadowBlur = 0;
           ctx.lineWidth = 0.8;
-          ctx.globalAlpha = 0.5 * dim;
+          ctx.globalAlpha = 0.5 * dim * pendingAlpha;
           ctx.beginPath(); ctx.arc(n.x, n.y, r * 0.55, 0, Math.PI * 2); ctx.stroke();
-          ctx.globalAlpha = dim;
+          ctx.globalAlpha = dim * pendingAlpha;
           ctx.fillStyle = accent;
           ctx.beginPath(); ctx.arc(n.x, n.y, 2.4, 0, Math.PI * 2); ctx.fill();
         }
@@ -1109,7 +1187,11 @@ function RadarCanvasInner({
         if (!(n.isHub || isSel || isHov)) continue;
         candidates.push({
           node:   n,
-          text:   n.isHub ? n.ref.label.toUpperCase() : n.id,
+          // Sprint 5s+ — hubs prefer sectorLabel (per spec §4.1 canvas
+          // caption rule) and fall back to the legacy label.
+          text:   n.isHub
+            ? (n.ref.sectorLabel ?? n.ref.label).toUpperCase()
+            : n.id,
           radius: radiusOf(n.ref),
           dim:    entityDim(n.id),
           bright: isSel || isHov,
@@ -1173,7 +1255,7 @@ function RadarCanvasInner({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, isolatedNodes, isolatedEdgeKeys, tracedNodes, tracedEdgeKeys, liveEntityIds, diffEdgeMap, vp.viewportRef]);
+  }, [entities, visibleTx, size, selectedId, hoverId, glowIntensity, curved, showFlow, radiusOf, matchedEntities, matchedEdgeKeys, isolatedNodes, isolatedEdgeKeys, tracedNodes, tracedEdgeKeys, liveEntityIds, diffEdgeMap, vp.viewportRef, mode, reducedMotion]);
 
   // Sprint 5s+ "29 비정상 엣지는 api 결과가 맞니?" — the operator caught
   // that the anomaly-edge counter was reading STATIC seed values from

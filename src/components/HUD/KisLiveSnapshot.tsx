@@ -158,7 +158,10 @@ export function KisLiveSnapshot({
         {symbols.map(sym => {
           const snap   = snapBySymbol.get(sym);
           const entity = entityMap.get(sym);
-          const label  = entity?.label ?? sym;
+          // Sprint 5s+ — prefer the securities-master display_name when
+          // available; falls through to legacy `label`, then the raw
+          // symbol code as the last resort.
+          const label  = entity?.display_name ?? entity?.label ?? sym;
           const cur    = slotsRef.current.current.get(sym);
           const prev   = slotsRef.current.prev.get(sym);
           // Live = we've seen this symbol's price (or refreshed its ts)

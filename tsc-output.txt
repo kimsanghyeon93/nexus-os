@@ -1,0 +1,50 @@
+﻿src/components/HUD/AlarmPanel.test.tsx(6,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/components/HUD/AlarmPanel.test.tsx(7,56): error TS2307: Cannot find module '@testing-library/react' or its corresponding type declarations.
+src/components/HUD/AlarmPanel.test.tsx(262,68): error TS18046: 'el' is of type 'unknown'.
+src/components/HUD/AuditModal.test.tsx(6,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/components/HUD/AuditModal.test.tsx(7,48): error TS2307: Cannot find module '@testing-library/react' or its corresponding type declarations.
+src/components/HUD/KisLiveSnapshot.test.tsx(5,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/components/HUD/KisLiveSnapshot.test.tsx(6,48): error TS2307: Cannot find module '@testing-library/react' or its corresponding type declarations.
+src/components/HUD/KisLiveSnapshot.test.tsx(153,11): error TS6133: 'styles' is declared but its value is never read.
+src/components/HUD/PriceSparkline.test.tsx(6,38): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/components/HUD/PriceSparkline.test.tsx(7,24): error TS2307: Cannot find module '@testing-library/react' or its corresponding type declarations.
+src/components/HUD/SystemHealthPanel.tsx(172,51): error TS6133: 'windowMinutes' is declared but its value is never read.
+src/components/HUD/TapePanel.test.tsx(4,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/components/HUD/TapePanel.test.tsx(5,48): error TS2307: Cannot find module '@testing-library/react' or its corresponding type declarations.
+src/hooks/useAlarms.test.ts(9,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/hooks/useAlarms.test.ts(10,42): error TS2307: Cannot find module '@testing-library/react' or its corresponding type declarations.
+src/hooks/useAlarms.test.ts(349,34): error TS7006: Parameter '_url' implicitly has an 'any' type.
+src/services/alarmsApi.test.ts(10,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/services/alarmsApi.ts(129,7): error TS2375: Type '{ errors?: { loc: Array<string | number>; msg: string; type: string; }[]; type: string; title: string; status: number; detail: string | undefined; instance: string | undefined; request_id: string; }' is not assignable to type 'ProblemDetail' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'detail' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/services/auditApi.test.ts(4,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/services/auditApi.ts(120,7): error TS2375: Type '{ errors?: { loc: Array<string | number>; msg: string; type: string; }[]; type: string; title: string; status: number; detail: string | undefined; instance: string | undefined; request_id: string; }' is not assignable to type 'ProblemDetail' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'detail' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/services/marketApi.test.ts(6,65): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/services/marketApi.ts(95,7): error TS2375: Type '{ errors?: { loc: Array<string | number>; msg: string; type: string; }[]; type: string; title: string; status: number; detail: string | undefined; instance: string | undefined; request_id: string; }' is not assignable to type 'ProblemDetail' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'detail' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/services/marketApi.ts(200,7): error TS2375: Type '{ errors?: { loc: Array<string | number>; msg: string; type: string; }[]; type: string; title: string; status: number; detail: string | undefined; instance: string | undefined; request_id: string; }' is not assignable to type 'ProblemDetail' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'detail' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/services/marketApi.ts(318,7): error TS2375: Type '{ errors?: { loc: Array<string | number>; msg: string; type: string; }[]; type: string; title: string; status: number; detail: string | undefined; instance: string | undefined; request_id: string; }' is not assignable to type 'ProblemDetail' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'detail' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/services/marketApi.ts(441,7): error TS2375: Type '{ errors?: { loc: Array<string | number>; msg: string; type: string; }[]; type: string; title: string; status: number; detail: string | undefined; instance: string | undefined; request_id: string; }' is not assignable to type 'ProblemDetail' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'detail' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/services/metricsApi.ts(118,7): error TS2375: Type '{ errors?: { loc: Array<string | number>; msg: string; type: string; }[]; type: string; title: string; status: number; detail: string | undefined; instance: string | undefined; request_id: string; }' is not assignable to type 'ProblemDetail' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'detail' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+src/test/setup.ts(7,31): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/test/setup.ts(8,25): error TS2307: Cannot find module '@testing-library/react' or its corresponding type declarations.
+src/test/setup.ts(37,3): error TS2578: Unused '@ts-expect-error' directive.

@@ -52,6 +52,27 @@ export interface NexusEntity {
   /** populated post-build */
   degree?: number;
   eigen?: number;
+  // ── Sprint 5s+ securities ontology fields ─────────────────────────
+  // Populated only when this entity was materialized from a SecurityDTO
+  // (or its hub/sector mirror); ontology-only nodes leave them undefined
+  // so the canvas / property HUD branches can fall through to the legacy
+  // label/type/jurisdiction rendering path.
+  /** Operator-facing localized name. SoT = backend `display_name` in
+   *  ko mode; in en mode the frontend's i18n hook overrides with
+   *  `name_en` (falling back through `name_ko → ticker`). */
+  display_name?: string;
+  ticker?: string;
+  market?: import('./api').SecurityMarket;
+  sectorLabel?: string;
+  currency?: string;
+  marketCap?: number | null;
+  lastPrice?: number | null;
+  changePct?: number | null;
+  isSubscribed?: boolean;
+  dataSource?: string;
+  /** Mirror of SecurityDTO.aliases — drives fuzzy search on the
+   *  sidebar input alongside ticker/display_name. */
+  aliases?: string[];
 }
 
 // Sprint 5s+: 'sector' edge kind. Stocks → their sector hub (KRX

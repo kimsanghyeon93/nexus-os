@@ -20,8 +20,9 @@ import type {
   SsoSession,
 } from '../types/nexus';
 import type { ConnectionState, IMarketStreamer } from '../types/streamer';
-import type { Quote } from '../types/api';
+import type { Quote, SecurityDTO, SecurityRelationDTO } from '../types/api';
 import { computeDiff, type EntityDelta } from '../utils/diff';
+import { buildSecuritiesDataset } from '../utils/securitiesDataset';
 
 export type EdgeDiffKind = 'new' | 'broken';
 
@@ -539,13 +540,109 @@ export interface UseMarketDataResult {
   resumeLive: () => void;
 }
 
-export function useMarketData(streamer?: IMarketStreamer): UseMarketDataResult {
+/** Sprint 5s+ — when a securities envelope is available, enrich the live
+ *  dataset with `SecurityDTO` metadata onto matching entities AND
+ *  materialize any unknown tickers as new entities. Idempotent so the
+ *  60s `useSecurities` poll can call it repeatedly without producing
+ *  duplicate nodes. Edges minted from `SecurityRelationDTO` are appended
+ *  unless an identical (from, to, kind) tuple already exists.
+ *
+ *  This is the "real-data path" that replaces the buildDataset() hard-
+ *  coded KIS-subscribed kr_equity subset (lines 272-289 in the legacy
+ *  builder). Non-security ontology nodes (HUB_*, sector aggregators,
+ *  MACRO, SOV, WATCH) are left untouched. */
+function applySecuritiesOverlay(
+  dataset: NexusDataset,
+  securities: SecurityDTO[],
+  relations: SecurityRelationDTO[],
+): void {
+  if (securities.length === 0 && relations.length === 0) return;
+
+  const built = buildSecuritiesDataset(securities, relations);
+
+  // Index of existing entities by id — O(1) merge.
+  const byId = new Map<string, NexusEntity>();
+  for (const e of dataset.ENTITIES) byId.set(e.id, e);
+
+  for (const newEnt of built.entities) {
+    const existing = byId.get(newEnt.id);
+    if (existing) {
+      // Merge metadata onto the existing entity in-place. Preserve the
+      // existing position (operator drag, force-sim) and anomaly (live
+      // tick stream) — overwriting them on every poll would jitter the
+      // canvas and stomp live data.
+      existing.display_name = newEnt.display_name;
+      existing.ticker       = newEnt.ticker;
+      existing.market       = newEnt.market;
+      existing.sectorLabel  = newEnt.sectorLabel;
+      existing.currency     = newEnt.currency;
+      existing.marketCap    = newEnt.marketCap;
+      existing.lastPrice    = newEnt.lastPrice;
+      existing.changePct    = newEnt.changePct;
+      existing.isSubscribed = newEnt.isSubscribed;
+      existing.dataSource   = newEnt.dataSource;
+      existing.aliases      = newEnt.aliases;
+      // Adopt the better label if the legacy one was placeholder-y.
+      if (newEnt.display_name && newEnt.display_name !== existing.id) {
+        existing.label = newEnt.display_name;
+      }
+    } else {
+      dataset.ENTITIES.push(newEnt);
+      byId.set(newEnt.id, newEnt);
+    }
+  }
+
+  // Edges — dedupe by `${from}->${to}|${kind}` so reruns don't double up.
+  const edgeKey = (e: NexusEdge) => `${e.from}->${e.to}|${e.kind}`;
+  const seenEdges = new Set<string>(dataset.TX.map(edgeKey));
+  for (const newEdge of built.edges) {
+    const k = edgeKey(newEdge);
+    if (seenEdges.has(k)) continue;
+    seenEdges.add(k);
+    dataset.TX.push(newEdge);
+  }
+
+  // Clusters — append market clusters that aren't already known.
+  const seenClusters = new Set<string>(dataset.CLUSTERS.map(c => c.id));
+  for (const c of built.clusters) {
+    if (seenClusters.has(c.id)) continue;
+    dataset.CLUSTERS.push(c);
+  }
+}
+
+/** Options for `useMarketData` — Sprint 5s+ accepts an injected
+ *  securities envelope. When supplied, the hook merges the real data
+ *  onto the live dataset on first response AND on subsequent refreshes
+ *  (idempotent via applySecuritiesOverlay). */
+export interface UseMarketDataOptions {
+  securities?: SecurityDTO[];
+  relations?:  SecurityRelationDTO[];
+}
+
+export function useMarketData(
+  streamer?: IMarketStreamer,
+  options: UseMarketDataOptions = {},
+): UseMarketDataResult {
   // Built once per mount and pinned via ref so harness packet mutations
   // (which mutate ENTITIES in-place) do not change the dataset reference and
   // therefore do not retrigger RadarCanvas's `[entities]` sim-rebuild effect.
   const liveDatasetRef = useRef<NexusDataset | null>(null);
   if (liveDatasetRef.current === null) liveDatasetRef.current = buildDataset();
   const liveDataset = liveDatasetRef.current;
+
+  // Sprint 5s+ — when the caller passes a securities envelope (via
+  // `useSecurities()`), merge it onto the live dataset in-place. The
+  // merge is idempotent (see applySecuritiesOverlay): repeat calls on
+  // the same data update SecurityDTO-derived metadata fields without
+  // jittering positions or anomaly. The effect runs on every change to
+  // the securities/relations references so the 60s poll cycle keeps the
+  // master metadata fresh.
+  const securities = options.securities;
+  const relations  = options.relations;
+  useEffect(() => {
+    if (!securities && !relations) return;
+    applySecuritiesOverlay(liveDataset, securities ?? [], relations ?? []);
+  }, [liveDataset, securities, relations]);
 
   // The dataset surfaced to the UI. Live mode = liveDatasetRef (stable id);
   // replay mode = the dropped dataset (new identity → RadarCanvas rebuilds

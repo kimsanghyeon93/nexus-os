@@ -97,7 +97,8 @@ export function VolumeHistogram({
         )}
         {sorted.map(b => {
           const entity = entityMap.get(b.symbol);
-          const label  = entity?.label ?? b.symbol;
+          // Sprint 5s+ — securities-master display_name preferred.
+          const label  = entity?.display_name ?? entity?.label ?? b.symbol;
           const pct    = maxVol > 0 ? (b.total_volume / maxVol) : 0;
           const isSelected = b.symbol === selectedId;
           return (

@@ -62,6 +62,13 @@ export interface EntityDTO {
   /** 0.0–1.0 anomaly score */
   anomaly: number;
   tx_vol:  number;
+  // Sprint 5s+ — securities ontology enrichment. Backend fills these when
+  // `entity.id` matches a `security_master.ticker`; for non-security
+  // ontology nodes (HUB_*, sector aggregators, watch list, etc.) they
+  // remain null. Frontend treats null as "fall back to legacy label".
+  display_name?: string | null;
+  ticker?:       string | null;
+  sector?:       string | null;
 }
 
 export interface EdgeDTO {
@@ -274,6 +281,12 @@ export interface AlarmDTO {
   message:           string;
   /** Ontology entity id this alarm references — null when no entity. */
   entity_id:         string | null;
+  /** Sprint 5s+ — human-readable security display name when `entity_id`
+   *  matches a `security_master.ticker`; null otherwise (non-security
+   *  ontology node, or no entity at all). AlarmRow renders
+   *  `${entity_display} · ${entity_id}` when present, falling back to
+   *  the raw `entity_id` when null. */
+  entity_display?:   string | null;
   /** ISO-8601 UTC. Newest-first ordering anchor. */
   occurred_at:       string;
   /** ISO-8601 UTC. null while status='active'. */
@@ -378,6 +391,109 @@ export interface OrderResponseDTO {
   status:   'accepted' | 'rejected';
   message:  string;
   ts:       string;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  /v1/securities — Securities Ontology (Sprint 5s+ master + relations)
+// ──────────────────────────────────────────────────────────────────────
+
+/** Where the security is listed. Wire format matches the backend
+ *  `SecurityMarket(str, Enum)` exactly. `OTHER` is the catch-all for
+ *  pre-IPO / OTC / non-listed instruments we still want to render. */
+export type SecurityMarket = 'KRX' | 'KOSDAQ' | 'NASDAQ' | 'NYSE' | 'OTHER';
+
+/** Relation kinds emitted by `GET /v1/securities/relations`. The wire
+ *  strings come from the backend `SecurityRelationKind(str, Enum)`.
+ *  Today only `sector` (and a few `same_chaebol` / `supply_chain` from
+ *  the static seed) are populated; the other variants are reserved so
+ *  the frontend can render them without a type bump when the backend
+ *  starts emitting correlation/cross-listing data. */
+export type SecurityRelationKind =
+  | 'sector'
+  | 'correlation'
+  | 'same_chaebol'
+  | 'supply_chain'
+  | 'cross_listing';
+
+/** Single security row from the master. Mirror of the backend's
+ *  `SecurityDTO` Pydantic model, snake_case throughout. `last_price` /
+ *  `change_pct` are always null from the master endpoint — the frontend
+ *  joins them in client-side from the `/v1/ticks/snapshot` stream. */
+export interface SecurityDTO {
+  ticker:             string;
+  /** Human-readable name resolved by the backend per §4.1 (option A —
+   *  always ko-preferred). Frontend may override with `name_en` in
+   *  English language mode. Never null — backend falls through to the
+   *  raw ticker when no localized name exists. */
+  display_name:       string;
+  /** Canonical Korean name. Null for non-KR listings. */
+  name_ko:            string | null;
+  /** Canonical English name. Null when the ko-only feed wasn't
+   *  translated. */
+  name_en:            string | null;
+  /** Search aliases — pre-normalized synonyms ("Samsung", "SEC", 등).
+   *  Empty array means the search index has only the canonical names
+   *  to work with. */
+  aliases:            string[];
+  market:             SecurityMarket;
+  /** Internal sector id, joins to `SECTOR:*` relation targets. */
+  sector:             string;
+  /** Operator-facing sector label (Korean preferred). */
+  sector_label:       string;
+  /** ISO 4217 currency code. */
+  currency:           string;
+  /** Float for very large caps, null when undisclosed. */
+  shares_outstanding: number | null;
+  /** Native currency. Null when the latest tick has not yet landed. */
+  market_cap:         number | null;
+  /** Latest trade price. Always null on /v1/securities — fetched
+   *  separately via the tick stream. */
+  last_price:         number | null;
+  /** Day-over-day percentage. Always null on /v1/securities — fetched
+   *  via the tick stream. */
+  change_pct:         number | null;
+  /** 0.0–1.0, mirrors EntityDTO.anomaly. Always 0.0 from the master
+   *  endpoint; the live value lives in EntityDTO and BackendStreamer. */
+  anomaly:            number;
+  tx_vol:             number;
+  /** True when this ticker is wired into KIS subscriptions and will
+   *  receive live ticks via BackendStreamer. */
+  is_subscribed:      boolean;
+  /** Provenance tag for operator confidence. `static_master` = seed
+   *  data; `cached` = backend served stale because upstream is down. */
+  data_source:        string;
+  /** ISO-8601 — last time the master row was refreshed. The `stale`
+   *  badge fires when (`now - updated_at` > 24h) OR `data_source ===
+   *  'cached'`. */
+  updated_at:         string;
+}
+
+/** Envelope returned by `GET /v1/securities`. Items are ticker-ASC
+ *  sorted server-side so the search index has a stable order. */
+export interface SecurityListDTO {
+  items:       SecurityDTO[];
+  total:       number;
+  /** ISO-8601 — when the backend assembled this envelope. Lets the UI
+   *  compute "freshness" without trusting the local clock. */
+  server_time: string;
+}
+
+/** One graph edge between two securities (or a security and a synthetic
+ *  sector hub like `SECTOR:SEMI`). The `directed` flag controls whether
+ *  the canvas renders an arrow vs a plain line. */
+export interface SecurityRelationDTO {
+  from_ticker: string;
+  /** May be a real ticker OR a synthetic id with the `SECTOR:` prefix.
+   *  When prefixed, the frontend materializes a virtual sector hub node
+   *  with `id = to_ticker` and adds it to the graph. */
+  to_ticker:   string;
+  kind:        SecurityRelationKind;
+  /** 0.0–1.0 — used as spring strength in the force-sim. */
+  weight:      number;
+  directed:    boolean;
+  /** Free-text provenance ("KRX sector classification", "co-listed
+   *  ADR", etc.). Surfaced in PropertyHUD on demand. */
+  evidence:    string | null;
 }
 
 // ──────────────────────────────────────────────────────────────────────
